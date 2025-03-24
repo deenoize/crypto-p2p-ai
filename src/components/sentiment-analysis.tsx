@@ -2,7 +2,10 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { openAIService } from "@/services/ai";
+import { Button } from "@/components/ui/button";
+import { ReloadIcon } from "@radix-ui/react-icons";
 
 const Plot = dynamic(() => import("react-plotly.js"), { ssr: false });
 
@@ -37,12 +40,82 @@ export function SentimentAnalysis() {
     { timestamp: "2024-03-19T01:00:00", sentimentScore: 65, confidence: 75 },
     { timestamp: "2024-03-19T02:00:00", sentimentScore: 62, confidence: 72 },
   ]);
+  
+  const [loading, setLoading] = useState(false);
+
+  // Function to fetch sentiment data
+  const fetchSentimentData = async () => {
+    setLoading(true);
+    try {
+      // Sample order book data - in a real app, this would come from your data store
+      const sampleOrderBookData = {
+        buyOrders: [
+          { price: 1.05, amount: 500, paymentMethod: "Bank Transfer" },
+          { price: 1.04, amount: 1000, paymentMethod: "Cash" },
+          { price: 1.03, amount: 750, paymentMethod: "Revolut" }
+        ],
+        sellOrders: [
+          { price: 1.06, amount: 800, paymentMethod: "Bank Transfer" },
+          { price: 1.07, amount: 600, paymentMethod: "Cash" },
+          { price: 1.08, amount: 350, paymentMethod: "Wise" }
+        ],
+        lastTrades: [
+          { price: 1.055, amount: 200, side: "buy", timestamp: new Date().toISOString() },
+          { price: 1.056, amount: 150, side: "sell", timestamp: new Date(Date.now() - 60000).toISOString() }
+        ]
+      };
+
+      // Call the OpenAI service to analyze sentiment
+      const newSentiment = await openAIService.analyzeSentiment(sampleOrderBookData);
+      
+      // Update the sentiment state
+      setSentiment(newSentiment);
+      
+      // Add the new sentiment to history
+      const newHistoryItem = {
+        timestamp: new Date().toISOString(),
+        sentimentScore: newSentiment.sentimentScore,
+        confidence: newSentiment.confidence * 100 // Convert to percentage
+      };
+      
+      setHistory(prevHistory => [...prevHistory, newHistoryItem]);
+    } catch (error) {
+      console.error("Error fetching sentiment data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch sentiment data on component mount
+  useEffect(() => {
+    fetchSentimentData();
+    
+    // Optional: Set up a polling interval
+    const interval = setInterval(fetchSentimentData, 60000); // Refresh every minute
+    
+    return () => clearInterval(interval); // Cleanup on unmount
+  }, []);
 
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Market Sentiment</CardTitle>
+          <Button 
+            size="sm" 
+            variant="outline"
+            onClick={fetchSentimentData}
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              <>Refresh Analysis</>
+            )}
+          </Button>
         </CardHeader>
         <CardContent>
           <Plot
@@ -85,7 +158,7 @@ export function SentimentAnalysis() {
               {sentiment.trend}
             </div>
             <div className="text-sm text-muted-foreground">
-              Confidence: {sentiment.confidence.toFixed(1)}%
+              Confidence: {(sentiment.confidence * 100).toFixed(1)}%
             </div>
           </CardContent>
         </Card>

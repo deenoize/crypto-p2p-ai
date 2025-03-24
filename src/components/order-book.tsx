@@ -147,10 +147,10 @@ const OrderRow = React.memo(({
         {formatPrice(order.price)}
       </TableCell>
       <TableCell className="py-1 px-2 text-xs whitespace-nowrap">
-        {formatAmount(order.amount)} {crypto}
-      </TableCell>
-      <TableCell className="py-1 px-2 text-xs whitespace-nowrap">
-        {formatLimit(order.minAmount, order.maxAmount)}
+        <div className="flex flex-col">
+          <span>{formatAmount(order.amount)} {crypto}</span>
+          <span className="text-[10px] text-muted-foreground">Limit: {formatLimit(order.minAmount, order.maxAmount)}</span>
+        </div>
       </TableCell>
       <TableCell className="py-1 px-2">
         <div className="flex flex-wrap gap-1 max-w-full">
@@ -313,11 +313,10 @@ const OrderTable = React.memo(({
       <Table className="order-book-table">
         <TableHeader className="sticky top-0 z-40 bg-background">
           <TableRow>
-            <TableHead className="py-1 px-2 text-xs w-[10%] min-w-[60px]">Price</TableHead>
-            <TableHead className="py-1 px-2 text-xs w-[12%] min-w-[60px]">Amount</TableHead>
-            <TableHead className="py-1 px-2 text-xs w-[14%] min-w-[70px]">Limit</TableHead>
+            <TableHead className="py-1 px-2 text-xs w-[12%] min-w-[70px]">Price</TableHead>
+            <TableHead className="py-1 px-2 text-xs w-[18%] min-w-[100px]">Amount</TableHead>
             <TableHead className="py-1 px-2 text-xs w-[35%] min-w-[150px]">Payment</TableHead>
-            <TableHead className="py-1 px-2 text-xs w-[29%] min-w-[120px]">Merchant</TableHead>
+            <TableHead className="py-1 px-2 text-xs w-[35%] min-w-[120px]">Merchant</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -387,7 +386,7 @@ export const OrderBook = React.memo(({
   };
   const formatLimit = (min: number, max: number) => {
     const symbol = CURRENCY_SYMBOLS[fiat] || fiat;
-    return `${symbol}${formatAmount(min)} - ${symbol}${formatAmount(max)}`;
+    return `${symbol}${min.toLocaleString()} - ${max.toLocaleString()}`;
   };
 
   const getMerchantTypeDisplay = (completedTrades: number, rating: number, completionRate: number) => {
