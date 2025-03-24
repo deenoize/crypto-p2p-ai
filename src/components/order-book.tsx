@@ -94,6 +94,7 @@ interface OrderBookProps {
   loading?: boolean;
   error?: string | null;
   hasChanges?: boolean;
+  spotPrice?: number;
 }
 
 interface OrderTableProps {
@@ -106,6 +107,8 @@ interface OrderTableProps {
   formatPercent: (value: number) => string;
   formatLastOnline: (lastOnlineTime: number) => string;
   getMerchantTypeDisplay: (completedTrades: number, rating: number, completionRate: number) => string;
+  formatDelta: (price: number, reference?: number) => string | null;
+  spotPrice?: number;
 }
 
 // Simplify OrderRow to focus only on rendering the static content
@@ -119,7 +122,10 @@ const OrderRow = React.memo(({
   formatPercent,
   formatLastOnline,
   getMerchantTypeDisplay,
-  className
+  formatDelta,
+  className,
+  spotPrice,
+  ...props
 }: {
   order: Order;
   type: 'buy' | 'sell';
@@ -130,7 +136,10 @@ const OrderRow = React.memo(({
   formatPercent: (value: number) => string;
   formatLastOnline: (lastOnlineTime: number) => string;
   getMerchantTypeDisplay: (completedTrades: number, rating: number, completionRate: number) => string;
+  formatDelta: (price: number, reference?: number) => string | null;
   className?: string;
+  spotPrice?: number;
+  [key: string]: any;
 }) => {
   const merchantType = getMerchantTypeDisplay(
     order.merchant.completedTrades,
@@ -138,13 +147,25 @@ const OrderRow = React.memo(({
     order.merchant.completionRate * 100
   ) as MerchantType;
 
+  // Calculate delta percentage if spot price is available
+  const delta = spotPrice ? ((order.price - spotPrice) / spotPrice) * 100 : undefined;
+  const deltaClass = delta ? (delta > 0 ? 'text-green-500' : delta < 0 ? 'text-red-500' : '') : '';
+  const deltaText = formatDelta(order.price, spotPrice);
+
   return (
-    <TableRow className={className}>
+    <TableRow className={className} {...props}>
       <TableCell className={cn(
         "py-1 px-2 text-xs whitespace-nowrap",
         type === 'buy' ? "text-green-600" : "text-red-600"
       )}>
-        {formatPrice(order.price)}
+        <div className="flex flex-col">
+          <span>{formatPrice(order.price)}</span>
+          {deltaText && (
+            <span className={cn("text-[10px]", deltaClass)}>
+              {deltaText}
+            </span>
+          )}
+        </div>
       </TableCell>
       <TableCell className="py-1 px-2 text-xs whitespace-nowrap">
         <div className="flex flex-col">
@@ -207,7 +228,9 @@ const OrderTable = React.memo(({
   formatLimit,
   formatPercent,
   formatLastOnline,
-  getMerchantTypeDisplay
+  getMerchantTypeDisplay,
+  formatDelta,
+  spotPrice
 }: OrderTableProps) => {
   // Keep track of orders that need to animate
   const prevOrdersRef = useRef<Record<string, Order>>({});
@@ -335,8 +358,10 @@ const OrderTable = React.memo(({
                 formatPercent={formatPercent}
                 formatLastOnline={formatLastOnline}
                 getMerchantTypeDisplay={getMerchantTypeDisplay}
+                formatDelta={formatDelta}
                 className={isNew ? "relative z-10" : undefined}
                 data-new={isNew ? "true" : "false"}
+                spotPrice={spotPrice}
               />
             );
           })}
@@ -358,8 +383,96 @@ export const OrderBook = React.memo(({
   sellOrders = [],
   loading = false,
   error = null,
-  hasChanges = false
+  hasChanges = false,
+  spotPrice
 }: OrderBookProps) => {
+  // Add state for spot price if not provided as a prop
+  const [currentSpotPrice, setCurrentSpotPrice] = useState<number | undefined>(spotPrice);
+  const [spotLoading, setSpotLoading] = useState<boolean>(false);
+
+  // Map crypto symbols to CoinGecko IDs
+  const cryptoIdMap: Record<string, string> = {
+    'BTC': 'bitcoin',
+    'ETH': 'ethereum',
+    'USDT': 'tether',
+    'USDC': 'usd-coin',
+    'BNB': 'binancecoin',
+    'XRP': 'ripple',
+    'ADA': 'cardano',
+    'DOGE': 'dogecoin',
+    'MATIC': 'matic-network',
+    'SOL': 'solana'
+  };
+
+  // Fetch spot price if not provided
+  useEffect(() => {
+    // If spot price is provided directly, use it
+    if (spotPrice !== undefined) {
+      setCurrentSpotPrice(spotPrice);
+      return;
+    }
+
+    // Only fetch if we don't have a spot price
+    const fetchSpotPrice = async () => {
+      setSpotLoading(true);
+      try {
+        // Get the correct CoinGecko ID for the crypto
+        const coinId = cryptoIdMap[crypto] || crypto.toLowerCase();
+        
+        // Using CoinGecko API
+        const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=${fiat.toLowerCase()}`);
+        
+        if (!response.ok) {
+          throw new Error(`CoinGecko API error: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data && data[coinId] && data[coinId][fiat.toLowerCase()]) {
+          const price = data[coinId][fiat.toLowerCase()];
+          console.log(`Spot price for ${crypto}/${fiat}: ${price}`);
+          setCurrentSpotPrice(price);
+        } else {
+          // Use fallback if API doesn't return expected data
+          console.warn(`No spot price data for ${crypto}/${fiat}, using fallback`);
+          useFallbackPrice();
+        }
+      } catch (err) {
+        console.error('Error fetching spot price:', err);
+        useFallbackPrice();
+      } finally {
+        setSpotLoading(false);
+      }
+    };
+
+    // Calculate a fallback price from order data
+    const useFallbackPrice = () => {
+      // Using average of buy/sell orders as an estimation
+      const buyAvg = buyOrders.length > 0 
+        ? buyOrders.reduce((sum, order) => sum + order.price, 0) / buyOrders.length
+        : 0;
+      const sellAvg = sellOrders.length > 0 
+        ? sellOrders.reduce((sum, order) => sum + order.price, 0) / sellOrders.length
+        : 0;
+      
+      if (buyAvg && sellAvg) {
+        const avgPrice = (buyAvg + sellAvg) / 2;
+        console.log(`Using calculated average price: ${avgPrice}`);
+        setCurrentSpotPrice(avgPrice);
+      } else if (buyAvg) {
+        console.log(`Using buy orders average price: ${buyAvg}`);
+        setCurrentSpotPrice(buyAvg);
+      } else if (sellAvg) {
+        console.log(`Using sell orders average price: ${sellAvg}`);
+        setCurrentSpotPrice(sellAvg);
+      } else {
+        console.log('No data available to calculate spot price');
+      }
+    };
+
+    fetchSpotPrice();
+  }, [crypto, fiat, spotPrice, buyOrders, sellOrders]);
+
   // Memoize the orders to prevent unnecessary re-renders
   const buyOrdersMemo = React.useMemo(() => buyOrders, [JSON.stringify(buyOrders.map(o => o.advNo))]);
   const sellOrdersMemo = React.useMemo(() => sellOrders, [JSON.stringify(sellOrders.map(o => o.advNo))]);
@@ -370,6 +483,16 @@ export const OrderBook = React.memo(({
     return `${symbol}${price.toLocaleString()}`;
   };
   const formatPercent = (value: number) => `${value.toFixed(1)}`;
+  
+  // Add a formatting function for the delta
+  const formatDelta = (price: number, reference?: number) => {
+    if (!reference) return null;
+    
+    const delta = ((price - reference) / reference) * 100;
+    const sign = delta > 0 ? '+' : '';
+    return `${sign}${delta.toFixed(2)}%`;
+  };
+  
   const formatLastOnline = (lastOnlineTime: number) => {
     if (!lastOnlineTime && lastOnlineTime !== 0) {
       return 'Unknown';
@@ -404,8 +527,9 @@ export const OrderBook = React.memo(({
     formatLimit,
     formatPercent,
     formatLastOnline,
-    getMerchantTypeDisplay
-  }), [fiat]);
+    getMerchantTypeDisplay,
+    formatDelta
+  }), [fiat, currentSpotPrice]);
 
   if (loading) {
     return (
@@ -440,7 +564,19 @@ export const OrderBook = React.memo(({
   return (
     <Card>
       <CardHeader className="py-1">
-        <CardTitle className="text-xs">Order Book</CardTitle>
+        <CardTitle className="text-xs flex items-center">
+          <span>Order Book</span>
+          {spotLoading ? (
+            <span className="ml-2 text-muted-foreground flex items-center">
+              <span className="h-3 w-3 animate-spin rounded-full border-b-2 border-gray-500 mr-1"></span>
+              Loading spot price...
+            </span>
+          ) : currentSpotPrice ? (
+            <span className="ml-2 text-muted-foreground">
+              (Spot: {formatPrice(currentSpotPrice)})
+            </span>
+          ) : null}
+        </CardTitle>
       </CardHeader>
       <CardContent className="p-2">
         <div className="flex gap-2">
@@ -449,12 +585,14 @@ export const OrderBook = React.memo(({
             type="sell"
             crypto={crypto}
             {...formattingProps}
+            spotPrice={currentSpotPrice}
           />
           <OrderTable 
             orders={buyOrdersMemo} 
             type="buy"
             crypto={crypto}
             {...formattingProps}
+            spotPrice={currentSpotPrice}
           />
         </div>
       </CardContent>
