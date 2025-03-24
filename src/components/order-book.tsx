@@ -621,6 +621,11 @@ export const OrderBook = React.memo(({
           <CardTitle className="flex items-center gap-2 text-lg font-medium">
             <LineChart className="h-4 w-4" />
             Order Book
+            {currentSpotPrice && (
+              <Badge variant="outline" className="bg-muted/50 text-xs rounded-sm px-1.5 py-0 h-5">
+                Spot: {formatPrice(currentSpotPrice)}
+              </Badge>
+            )}
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             {hasChanges && !loading && (
               <Badge variant="outline" className="text-[9px] rounded-sm px-1 py-0 h-4">
@@ -681,6 +686,11 @@ export const OrderBook = React.memo(({
           <CardTitle className="flex items-center gap-2 text-lg font-medium">
             <LineChart className="h-4 w-4" />
             Order Book
+            {currentSpotPrice && (
+              <Badge variant="outline" className="bg-muted/50 text-xs rounded-sm px-1.5 py-0 h-5">
+                Spot: {formatPrice(currentSpotPrice)}
+              </Badge>
+            )}
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             {hasChanges && !loading && (
               <Badge variant="outline" className="text-[9px] rounded-sm px-1 py-0 h-4">
@@ -706,6 +716,11 @@ export const OrderBook = React.memo(({
           <CardTitle className="flex items-center gap-2 text-lg font-medium">
             <LineChart className="h-4 w-4" />
             Order Book
+            {currentSpotPrice && (
+              <Badge variant="outline" className="bg-muted/50 text-xs rounded-sm px-1.5 py-0 h-5">
+                Spot: {formatPrice(currentSpotPrice)}
+              </Badge>
+            )}
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             {hasChanges && !loading && (
               <Badge variant="outline" className="text-[9px] rounded-sm px-1 py-0 h-4">
@@ -730,6 +745,11 @@ export const OrderBook = React.memo(({
         <CardTitle className="flex items-center gap-2 text-lg font-medium">
           <LineChart className="h-4 w-4" />
           Order Book
+          {currentSpotPrice && (
+            <Badge variant="outline" className="bg-muted/50 text-xs rounded-sm px-1.5 py-0 h-5">
+              Spot: {formatPrice(currentSpotPrice)}
+            </Badge>
+          )}
           {loading && <Loader2 className="h-4 w-4 animate-spin" />}
           {hasChanges && !loading && (
             <Badge variant="outline" className="text-[9px] rounded-sm px-1 py-0 h-4">
