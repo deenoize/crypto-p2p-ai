@@ -484,6 +484,13 @@ export const OrderBook = React.memo(({
       return;
     }
 
+    // For USD to USDT or USD to USDC pairs, always use 1 as the spot price
+    if (fiat === 'USD' && (crypto === 'USDT' || crypto === 'USDC')) {
+      console.log(`Using fixed spot price of 1 for ${crypto}/${fiat}`);
+      setCurrentSpotPrice(1);
+      return;
+    }
+
     // Only fetch if we don't have a spot price
     const fetchSpotPrice = async () => {
       setSpotLoading(true);
