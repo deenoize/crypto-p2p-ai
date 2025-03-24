@@ -141,33 +141,43 @@ const OrderRow = React.memo(({
   spotPrice?: number;
   [key: string]: any;
 }) => {
-  const merchantType = getMerchantTypeDisplay(
-    order.merchant.completedTrades,
-    order.merchant.rating * 100,
-    order.merchant.completionRate * 100
-  ) as MerchantType;
+  // Use useMemo for expensive calculations to prevent recalculation on re-render
+  const merchantType = React.useMemo(() => {
+    return getMerchantTypeDisplay(
+      order.merchant.completedTrades,
+      order.merchant.rating * 100,
+      order.merchant.completionRate * 100
+    ) as MerchantType;
+  }, [order.merchant.completedTrades, order.merchant.rating, order.merchant.completionRate, getMerchantTypeDisplay]);
 
   // Directly calculate the delta text using the passed spotPrice
-  let deltaText = null;
-  let deltaClass = '';
-  
-  if (spotPrice) {
-    const delta = ((order.price - spotPrice) / spotPrice) * 100;
-    deltaText = delta > 0 ? `+${delta.toFixed(2)}%` : `${delta.toFixed(2)}%`;
-    deltaClass = delta > 0 ? 'text-green-500' : delta < 0 ? 'text-red-500' : '';
-  }
+  const deltaInfo = React.useMemo(() => {
+    let deltaText = null;
+    let deltaClass = '';
+    
+    if (spotPrice) {
+      const delta = ((order.price - spotPrice) / spotPrice) * 100;
+      deltaText = delta > 0 ? `+${delta.toFixed(2)}%` : `${delta.toFixed(2)}%`;
+      deltaClass = delta > 0 ? 'text-green-500' : delta < 0 ? 'text-red-500' : '';
+    }
+    
+    return { deltaText, deltaClass };
+  }, [order.price, spotPrice]);
 
   return (
-    <TableRow className={className} {...props}>
+    <TableRow 
+      className={cn("order-row transition-none", className)} 
+      {...props}
+    >
       <TableCell className={cn(
         "py-1 px-2 text-xs whitespace-nowrap",
         type === 'buy' ? "text-green-600" : "text-red-600"
       )}>
         <div className="flex flex-col">
           <span>{formatPrice(order.price)}</span>
-          {deltaText && (
-            <span className={cn("text-[10px]", deltaClass)}>
-              {deltaText}
+          {deltaInfo.deltaText && (
+            <span className={cn("text-[10px]", deltaInfo.deltaClass)}>
+              {deltaInfo.deltaText}
             </span>
           )}
         </div>
@@ -252,17 +262,54 @@ const OrderTable = React.memo(({
     const currentIds = new Set(orders.map(o => o.advNo));
     const prevIds = new Set(Object.keys(prevOrdersRef.current));
     
-    // Find new orders to animate in
-    const newRows = container.querySelectorAll(`[data-new="true"]`);
-    newRows.forEach(row => {
-      // Reset any previous animations
-      row.classList.remove('animate-in');
-      
-      // Trigger reflow to restart animation - cast to HTMLElement to access offsetWidth
-      void (row as HTMLElement).offsetWidth;
-      
-      // Start animation
-      row.classList.add('animate-in');
+    // Find new orders to animate in (only in current, not in previous)
+    const newOrderIds = Array.from(currentIds).filter(id => !prevIds.has(id));
+    
+    // Find orders that should animate out (only in previous, not in current)
+    const removedOrderIds = Array.from(prevIds).filter(id => !currentIds.has(id));
+    
+    // Clean up any orphaned 'animate-out' elements from previous renders
+    const orphanedElements = container.querySelectorAll('.animate-out');
+    orphanedElements.forEach(el => {
+      setTimeout(() => {
+        if (el.parentNode) {
+          el.parentNode.removeChild(el);
+        }
+      }, 100);
+    });
+    
+    // Add/remove animation classes using DOM manipulation for better performance
+    
+    // Animate in new orders
+    newOrderIds.forEach(orderId => {
+      const row = container.querySelector(`[data-order-id="${orderId}"]`);
+      if (row) {
+        // Reset any previous animations
+        row.classList.remove('animate-in', 'animate-out');
+        
+        // Trigger reflow to restart animation
+        void (row as HTMLElement).offsetWidth;
+        
+        // Start animation
+        row.classList.add('animate-in');
+      }
+    });
+    
+    // Animate out removed orders - we'll handle this by keeping them in DOM briefly
+    removedOrderIds.forEach(orderId => {
+      // Only try to animate out orders that are still in the DOM but about to be removed
+      const row = container.querySelector(`[data-order-id="${orderId}"]`);
+      if (row) {
+        row.classList.remove('animate-in');
+        row.classList.add('animate-out');
+        
+        // Remove from DOM after animation completes
+        setTimeout(() => {
+          if (row.parentNode) {
+            row.parentNode.removeChild(row);
+          }
+        }, 300); // Match duration in CSS
+      }
     });
     
     // Update our reference for the next comparison
@@ -292,6 +339,9 @@ const OrderTable = React.memo(({
         .animate-out {
           animation: slideOut 0.3s ease-out forwards;
           pointer-events: none;
+          position: absolute !important;
+          width: 100%;
+          z-index: -1;
         }
         
         @keyframes slideIn {
@@ -320,6 +370,7 @@ const OrderTable = React.memo(({
         .order-book-table {
           table-layout: fixed;
           width: 100%;
+          position: relative;
         }
         
         .order-book-table td {
@@ -339,6 +390,12 @@ const OrderTable = React.memo(({
           z-index: 5;
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
         }
+        
+        /* Ensure specific row heights for consistent animations */
+        .order-book-table tr {
+          transition: none !important;
+          position: relative;
+        }
       `}</style>
       <Table className="order-book-table">
         <TableHeader className="sticky top-0 z-40 bg-background">
@@ -350,9 +407,9 @@ const OrderTable = React.memo(({
           </TableRow>
         </TableHeader>
         <TableBody>
+          {/* Add a key based on the specific order ID to maintain identity */}
           {orders.map((order, index) => {
             const isNew = !prevOrdersRef.current[order.advNo];
-            // Use a stable key that doesn't change between renders
             return (
               <OrderRow
                 key={order.advNo}
@@ -368,6 +425,7 @@ const OrderTable = React.memo(({
                 formatDelta={formatDelta}
                 className={isNew ? "relative z-10" : undefined}
                 data-new={isNew ? "true" : "false"}
+                data-order-id={order.advNo}
                 spotPrice={spotPrice}
               />
             );
@@ -377,10 +435,14 @@ const OrderTable = React.memo(({
     </div>
   );
 }, (prevProps, nextProps) => {
-  // Only re-render if the order IDs change
+  // We need to update in two cases:
+  // 1. The order IDs have changed (new orders, removed orders, or reordering)
+  // 2. The spot price has changed (to update delta calculations)
   const prevIds = prevProps.orders.map(o => o.advNo).join(',');
   const nextIds = nextProps.orders.map(o => o.advNo).join(',');
-  return prevIds === nextIds;
+  const spotPriceChanged = prevProps.spotPrice !== nextProps.spotPrice;
+  
+  return prevIds === nextIds && !spotPriceChanged;
 });
 
 export const OrderBook = React.memo(({ 
