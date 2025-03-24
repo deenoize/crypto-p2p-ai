@@ -164,67 +164,92 @@ const OrderRow = React.memo(({
     return { deltaText, deltaClass };
   }, [order.price, spotPrice]);
 
+  // Memoize the rendered content to prevent unnecessary re-renders
+  const priceCell = React.useMemo(() => (
+    <TableCell className={cn(
+      "py-1 px-2 text-xs whitespace-nowrap",
+      type === 'buy' ? "text-green-600" : "text-red-600"
+    )}>
+      <div className="flex flex-col">
+        <span>{formatPrice(order.price)}</span>
+        {deltaInfo.deltaText && (
+          <span className={cn("text-[10px]", deltaInfo.deltaClass)}>
+            {deltaInfo.deltaText}
+          </span>
+        )}
+      </div>
+    </TableCell>
+  ), [formatPrice, order.price, type, deltaInfo]);
+
+  const amountCell = React.useMemo(() => (
+    <TableCell className="py-1 px-2 text-xs whitespace-nowrap">
+      <div className="flex flex-col">
+        <span>{formatAmount(order.amount)} {crypto}</span>
+        <span className="text-[10px] text-muted-foreground">Limit: {formatLimit(order.minAmount, order.maxAmount)}</span>
+      </div>
+    </TableCell>
+  ), [formatAmount, formatLimit, order.amount, order.minAmount, order.maxAmount, crypto]);
+
+  const paymentCell = React.useMemo(() => (
+    <TableCell className="py-1 px-2">
+      <div className="flex flex-wrap gap-1 max-w-full">
+        {order.paymentMethods.map((method, i) => (
+          <Badge 
+            key={i} 
+            variant="outline" 
+            className={cn(
+              "payment-method-badge px-2 py-0.5 my-0.5 text-[10px] transition-all duration-200 hover:bg-muted inline-block",
+              getPaymentMethodColor(method)
+            )}
+          >
+            {method}
+          </Badge>
+        ))}
+      </div>
+    </TableCell>
+  ), [order.paymentMethods]);
+
+  const merchantCell = React.useMemo(() => (
+    <TableCell className="py-1 px-2">
+      <div className="flex flex-col gap-0.5">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-1">
+          <span className="font-medium text-xs truncate max-w-full">{order.merchant.name}</span>
+          <Badge 
+            variant="outline" 
+            className={cn(
+              "px-1.5 py-0 text-[10px] transition-all duration-200 whitespace-nowrap flex-shrink-0",
+              MERCHANT_TYPE_COLORS[merchantType]
+            )}
+          >
+            {merchantType}
+          </Badge>
+        </div>
+        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+          <span>{formatPercent(order.merchant.rating * 100)}% pos</span>
+          <span>{formatPercent(order.merchant.completionRate * 100)}% comp</span>
+          <span>{formatLastOnline(order.merchant.lastOnlineTime)}</span>
+        </div>
+      </div>
+    </TableCell>
+  ), [
+    order.merchant.name, 
+    order.merchant.rating, 
+    order.merchant.completionRate, 
+    order.merchant.lastOnlineTime,
+    merchantType,
+    formatPercent,
+    formatLastOnline
+  ]);
+
   return (
     <TableRow 
-      className={cn("order-row transition-none", className)} 
+      className={cn("order-row", className)} 
       {...props}
     >
-      <TableCell className={cn(
-        "py-1 px-2 text-xs whitespace-nowrap",
-        type === 'buy' ? "text-green-600" : "text-red-600"
-      )}>
-        <div className="flex flex-col">
-          <span>{formatPrice(order.price)}</span>
-          {deltaInfo.deltaText && (
-            <span className={cn("text-[10px]", deltaInfo.deltaClass)}>
-              {deltaInfo.deltaText}
-            </span>
-          )}
-        </div>
-      </TableCell>
-      <TableCell className="py-1 px-2 text-xs whitespace-nowrap">
-        <div className="flex flex-col">
-          <span>{formatAmount(order.amount)} {crypto}</span>
-          <span className="text-[10px] text-muted-foreground">Limit: {formatLimit(order.minAmount, order.maxAmount)}</span>
-        </div>
-      </TableCell>
-      <TableCell className="py-1 px-2">
-        <div className="flex flex-wrap gap-1 max-w-full">
-          {order.paymentMethods.map((method, i) => (
-            <Badge 
-              key={i} 
-              variant="outline" 
-              className={cn(
-                "payment-method-badge px-2 py-0.5 my-0.5 text-[10px] transition-all duration-200 hover:bg-muted inline-block",
-                getPaymentMethodColor(method)
-              )}
-            >
-              {method}
-            </Badge>
-          ))}
-        </div>
-      </TableCell>
-      <TableCell className="py-1 px-2">
-        <div className="flex flex-col gap-0.5">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-1">
-            <span className="font-medium text-xs truncate max-w-full">{order.merchant.name}</span>
-            <Badge 
-              variant="outline" 
-              className={cn(
-                "px-1.5 py-0 text-[10px] transition-all duration-200 whitespace-nowrap flex-shrink-0",
-                MERCHANT_TYPE_COLORS[merchantType]
-              )}
-            >
-              {merchantType}
-            </Badge>
-          </div>
-          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-            <span>{formatPercent(order.merchant.rating * 100)}% pos</span>
-            <span>{formatPercent(order.merchant.completionRate * 100)}% comp</span>
-            <span>{formatLastOnline(order.merchant.lastOnlineTime)}</span>
-          </div>
-        </div>
-      </TableCell>
+      {priceCell}
+      {amountCell}
+      {paymentCell}
+      {merchantCell}
     </TableRow>
   );
 }, (prevProps, nextProps) => {
@@ -251,74 +276,82 @@ const OrderTable = React.memo(({
 }: OrderTableProps) => {
   // Keep track of orders that need to animate
   const prevOrdersRef = useRef<Record<string, Order>>({});
+  const prevOrdersIdsRef = useRef<string[]>([]);
   const ordersContainerRef = useRef<HTMLDivElement>(null);
+  const tableBodyRef = useRef<HTMLTableSectionElement>(null);
   
   // Handle animations via DOM manipulation
   useEffect(() => {
     const container = ordersContainerRef.current;
-    if (!container) return;
+    const tableBody = tableBodyRef.current;
+    if (!container || !tableBody) return;
     
-    // Get current and previous order IDs
-    const currentIds = new Set(orders.map(o => o.advNo));
-    const prevIds = new Set(Object.keys(prevOrdersRef.current));
-    
-    // Find new orders to animate in (only in current, not in previous)
-    const newOrderIds = Array.from(currentIds).filter(id => !prevIds.has(id));
-    
-    // Find orders that should animate out (only in previous, not in current)
-    const removedOrderIds = Array.from(prevIds).filter(id => !currentIds.has(id));
-    
-    // Clean up any orphaned 'animate-out' elements from previous renders
-    const orphanedElements = container.querySelectorAll('.animate-out');
-    orphanedElements.forEach(el => {
-      setTimeout(() => {
-        if (el.parentNode) {
-          el.parentNode.removeChild(el);
-        }
-      }, 100);
+    // Create maps of current and previous orders by ID
+    const currentOrdersMap: Record<string, Order> = {};
+    const currentOrderIds: string[] = orders.map(o => {
+      currentOrdersMap[o.advNo] = o;
+      return o.advNo;
     });
     
-    // Add/remove animation classes using DOM manipulation for better performance
+    // Get references to previous orders
+    const prevOrdersMap = prevOrdersRef.current;
+    const prevOrderIds = prevOrdersIdsRef.current;
     
-    // Animate in new orders
-    newOrderIds.forEach(orderId => {
-      const row = container.querySelector(`[data-order-id="${orderId}"]`);
+    // Create a Set for faster lookups
+    const currentIdsSet = new Set(currentOrderIds);
+    const prevIdsSet = new Set(prevOrderIds);
+    
+    // Find new and removed order IDs
+    const newOrderIds = currentOrderIds.filter(id => !prevIdsSet.has(id));
+    const removedOrderIds = prevOrderIds.filter(id => !currentIdsSet.has(id));
+    
+    // First, handle entering new orders
+    newOrderIds.forEach(id => {
+      const row = tableBody.querySelector(`[data-order-id="${id}"]`);
       if (row) {
-        // Reset any previous animations
-        row.classList.remove('animate-in', 'animate-out');
+        // Mark the row as new and set initial state for animation
+        row.classList.add('order-new');
+        (row as HTMLElement).style.opacity = '0';
+        (row as HTMLElement).style.transform = 'translateY(-10px)';
         
-        // Trigger reflow to restart animation
-        void (row as HTMLElement).offsetWidth;
-        
-        // Start animation
-        row.classList.add('animate-in');
+        // Trigger animation after a small delay to ensure the DOM is updated
+        setTimeout(() => {
+          (row as HTMLElement).style.transition = 'opacity 300ms ease-out, transform 300ms ease-out';
+          (row as HTMLElement).style.opacity = '1';
+          (row as HTMLElement).style.transform = 'translateY(0)';
+          
+          // Clean up transition after animation completes
+          setTimeout(() => {
+            row.classList.remove('order-new');
+            (row as HTMLElement).style.transition = '';
+          }, 300);
+        }, 50);
       }
     });
     
-    // Animate out removed orders - we'll handle this by keeping them in DOM briefly
-    removedOrderIds.forEach(orderId => {
-      // Only try to animate out orders that are still in the DOM but about to be removed
-      const row = container.querySelector(`[data-order-id="${orderId}"]`);
+    // Handle exiting orders - we need to keep them in DOM temporarily
+    removedOrderIds.forEach(id => {
+      const row = tableBody.querySelector(`[data-order-id="${id}"]`);
       if (row) {
-        row.classList.remove('animate-in');
-        row.classList.add('animate-out');
+        // Mark as removing and start exit animation
+        row.classList.add('order-removing');
+        (row as HTMLElement).style.transition = 'opacity 300ms ease-out, transform 300ms ease-out';
+        (row as HTMLElement).style.opacity = '0';
+        (row as HTMLElement).style.transform = 'translateY(10px)';
+        (row as HTMLElement).style.pointerEvents = 'none';
         
         // Remove from DOM after animation completes
         setTimeout(() => {
           if (row.parentNode) {
             row.parentNode.removeChild(row);
           }
-        }, 300); // Match duration in CSS
+        }, 300);
       }
     });
     
-    // Update our reference for the next comparison
-    const newOrdersMap: Record<string, Order> = {};
-    orders.forEach(order => {
-      newOrdersMap[order.advNo] = order;
-    });
-    prevOrdersRef.current = newOrdersMap;
-    
+    // Update our references for the next render
+    prevOrdersRef.current = { ...currentOrdersMap };
+    prevOrdersIdsRef.current = [...currentOrderIds];
   }, [orders]);
   
   // Using a stable structure with a unique key for each order position
@@ -332,41 +365,7 @@ const OrderTable = React.memo(({
         <h3 className="text-xs font-medium">{type === 'buy' ? 'Buy' : 'Sell'} Orders</h3>
       </div>
       <style jsx global>{`
-        .animate-in {
-          animation: slideIn 0.3s ease-out forwards;
-        }
-        
-        .animate-out {
-          animation: slideOut 0.3s ease-out forwards;
-          pointer-events: none;
-          position: absolute !important;
-          width: 100%;
-          z-index: -1;
-        }
-        
-        @keyframes slideIn {
-          from {
-            opacity: 0;
-            transform: translateY(-15px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        
-        @keyframes slideOut {
-          from {
-            opacity: 1;
-            transform: translateY(0);
-          }
-          to {
-            opacity: 0;
-            transform: translateY(15px);
-          }
-        }
-        
-        /* Ensure table adjusts properly */
+        /* Order animation styles */
         .order-book-table {
           table-layout: fixed;
           width: 100%;
@@ -378,7 +377,26 @@ const OrderTable = React.memo(({
           text-overflow: ellipsis;
         }
         
-        /* Payment method badge hover effect for better readability */
+        /* Ensure rows have proper stacking context */
+        .order-row {
+          position: relative;
+          z-index: 1;
+          transition: none !important;
+        }
+        
+        /* Force hardware acceleration and prevent blinking */
+        .order-new, .order-removing {
+          will-change: opacity, transform;
+          backface-visibility: hidden;
+        }
+        
+        .order-removing {
+          position: absolute;
+          width: 100%;
+          z-index: 0;
+        }
+        
+        /* Payment method badge hover effect */
         .payment-method-badge {
           transition: all 0.2s ease;
           position: relative;
@@ -390,12 +408,6 @@ const OrderTable = React.memo(({
           z-index: 5;
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
         }
-        
-        /* Ensure specific row heights for consistent animations */
-        .order-book-table tr {
-          transition: none !important;
-          position: relative;
-        }
       `}</style>
       <Table className="order-book-table">
         <TableHeader className="sticky top-0 z-40 bg-background">
@@ -406,9 +418,8 @@ const OrderTable = React.memo(({
             <TableHead className="py-1 px-2 text-xs w-[35%] min-w-[120px]">Merchant</TableHead>
           </TableRow>
         </TableHeader>
-        <TableBody>
-          {/* Add a key based on the specific order ID to maintain identity */}
-          {orders.map((order, index) => {
+        <TableBody ref={tableBodyRef}>
+          {orders.map((order) => {
             const isNew = !prevOrdersRef.current[order.advNo];
             return (
               <OrderRow
@@ -423,9 +434,9 @@ const OrderTable = React.memo(({
                 formatLastOnline={formatLastOnline}
                 getMerchantTypeDisplay={getMerchantTypeDisplay}
                 formatDelta={formatDelta}
-                className={isNew ? "relative z-10" : undefined}
-                data-new={isNew ? "true" : "false"}
+                className="order-row"
                 data-order-id={order.advNo}
+                data-new={isNew ? "true" : "false"}
                 spotPrice={spotPrice}
               />
             );
