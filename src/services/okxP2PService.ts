@@ -65,34 +65,41 @@ export class OkxP2PService {
         throw new Error('Invalid API response structure');
       }
 
-      return response.data.data.map((item: any, index: number) => {
-        // OKX API response structure will need to be adapted here
-        // This is a placeholder implementation until we know the actual structure
+      return response.data.data.map((item: any) => {
+        // Extract values safely from the mock data structure
+        const advData = item.adv || {};
+        const advertiserData = item.advertiser || {};
         
+        // Get the last online time from activeTimeInSecond if available
         let lastOnlineTime = 0;
-        if (item.advertiser && item.advertiser.activeTimeInSecond) {
-          lastOnlineTime = Math.floor(Date.now() / 1000) - item.advertiser.activeTimeInSecond;
+        if (advertiserData.activeTimeInSecond) {
+          lastOnlineTime = Math.floor(Date.now() / 1000) - advertiserData.activeTimeInSecond;
         }
 
         // Parse and validate numeric values
-        const price = parseFloat(item.adv?.price || '0');
-        const amount = parseFloat(item.adv?.surplusAmount || '0');
-        const minAmount = parseFloat(item.adv?.minSingleTransAmount || '0');
-        const maxAmount = parseFloat(item.adv?.maxSingleTransAmount || '0');
+        const price = parseFloat(advData.price || '0');
+        const amount = parseFloat(advData.surplusAmount || '0');
+        const minAmount = parseFloat(advData.minSingleTransAmount || '0');
+        const maxAmount = parseFloat(advData.maxSingleTransAmount || '0');
 
         // Validate data before returning
         if (isNaN(price) || isNaN(amount) || isNaN(minAmount) || isNaN(maxAmount)) {
-          console.error('Invalid number format in OKX order data:', {
-            price: item.adv?.price,
-            amount: item.adv?.surplusAmount,
-            minAmount: item.adv?.minSingleTransAmount, 
-            maxAmount: item.adv?.maxSingleTransAmount
+          this.error('Invalid number format in OKX order data:', {
+            price: advData.price,
+            amount: advData.surplusAmount,
+            minAmount: advData.minSingleTransAmount, 
+            maxAmount: advData.maxSingleTransAmount
           });
           return null; // This will be filtered out by .filter(Boolean)
         }
 
-        // Ensure we always have a valid advNo, or create a unique one
-        const advNo = (item.adv?.advNo || `okx-${tradeType}-${index}-${Date.now()}`).toString();
+        // Extract payment methods
+        const paymentMethods = Array.isArray(advData.tradeMethods) 
+          ? advData.tradeMethods.map((method: any) => method.identifier || method.payType || 'Unknown')
+          : [];
+
+        // Get a valid advNo or create one
+        const advNo = (advData.advNo || `okx-${tradeType}-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`).toString();
 
         return {
           advNo: advNo,
@@ -101,15 +108,15 @@ export class OkxP2PService {
           amount: amount,
           minAmount: minAmount,
           maxAmount: maxAmount,
-          paymentMethods: item.adv?.tradeMethods ? item.adv.tradeMethods.map((method: any) => method.identifier) : [],
+          paymentMethods: paymentMethods,
           merchant: {
-            name: item.advertiser?.nickName || 'Unknown',
-            rating: item.advertiser?.positiveRate || 0,
-            completedTrades: item.advertiser?.monthOrderCount || 0,
-            completionRate: item.advertiser?.monthFinishRate || 0,
-            lastOnlineTime: lastOnlineTime || 0,
-            userType: item.advertiser?.userType || 'user',
-            userIdentity: item.advertiser?.userIdentity || ''
+            name: advertiserData.nickName || 'Unknown',
+            rating: parseFloat(advertiserData.positiveRate || 0),
+            completedTrades: parseInt(advertiserData.monthOrderCount || 0),
+            completionRate: parseFloat(advertiserData.monthFinishRate || 0),
+            lastOnlineTime: lastOnlineTime,
+            userType: advertiserData.userType || 'user',
+            userIdentity: advertiserData.userIdentity || ''
           }
         };
       }).filter(Boolean);
