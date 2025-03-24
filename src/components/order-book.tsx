@@ -165,30 +165,52 @@ const OrderRow = React.memo(({
   }, [order.price, spotPrice]);
 
   // Memoize the rendered content to prevent unnecessary re-renders
-  const priceCell = React.useMemo(() => (
-    <TableCell className={cn(
-      "py-1 px-2 text-xs whitespace-nowrap",
-      type === 'buy' ? "text-green-600" : "text-red-600"
-    )}>
-      <div className="flex flex-col">
-        <span>{formatPrice(order.price)}</span>
-        {deltaInfo.deltaText && (
-          <span className={cn("text-[10px]", deltaInfo.deltaClass)}>
-            {deltaInfo.deltaText}
-          </span>
-        )}
-      </div>
-    </TableCell>
-  ), [formatPrice, order.price, type, deltaInfo]);
+  const priceCell = React.useMemo(() => {
+    // Debug check for price validity
+    const isValidPrice = typeof order.price === 'number' && !isNaN(order.price);
+    const priceDisplay = isValidPrice 
+      ? formatPrice(order.price)
+      : `Invalid (${typeof order.price}: ${order.price})`;
+    
+    return (
+      <TableCell className={cn(
+        "py-1 px-2 text-xs whitespace-nowrap",
+        type === 'buy' ? "text-green-600" : "text-red-600",
+        !isValidPrice ? "bg-red-100 dark:bg-red-900/30" : ""
+      )}>
+        <div className="flex flex-col">
+          <span>{priceDisplay}</span>
+          {isValidPrice && deltaInfo.deltaText && (
+            <span className={cn("text-[10px]", deltaInfo.deltaClass)}>
+              {deltaInfo.deltaText}
+            </span>
+          )}
+        </div>
+      </TableCell>
+    );
+  }, [formatPrice, order.price, type, deltaInfo]);
 
-  const amountCell = React.useMemo(() => (
-    <TableCell className="py-1 px-2 text-xs whitespace-nowrap">
-      <div className="flex flex-col">
-        <span>{formatAmount(order.amount)} {crypto}</span>
-        <span className="text-[10px] text-muted-foreground">Limit: {formatLimit(order.minAmount, order.maxAmount)}</span>
-      </div>
-    </TableCell>
-  ), [formatAmount, formatLimit, order.amount, order.minAmount, order.maxAmount, crypto]);
+  const amountCell = React.useMemo(() => {
+    // Debug check for amount validity
+    const isValidAmount = typeof order.amount === 'number' && !isNaN(order.amount);
+    const amountDisplay = isValidAmount 
+      ? `${formatAmount(order.amount)} ${crypto}`
+      : `Invalid (${typeof order.amount}: ${order.amount})`;
+    
+    return (
+      <TableCell className={cn(
+        "py-1 px-2 text-xs whitespace-nowrap",
+        !isValidAmount ? "bg-red-100 dark:bg-red-900/30" : ""
+      )}>
+        <div className="flex flex-col">
+          <span>{amountDisplay}</span>
+          <span className="text-[10px] text-muted-foreground">
+            Limit: {formatLimit(order.minAmount, order.maxAmount)}
+          </span>
+        </div>
+      </TableCell>
+    );
+  }, [formatAmount, formatLimit, order.amount, order.minAmount, order.maxAmount, crypto]);
 
   const paymentCell = React.useMemo(() => (
     <TableCell className="py-1 px-2">
@@ -539,6 +561,51 @@ export const OrderBook = React.memo(({
   // Add state for spot price if not provided as a prop
   const [currentSpotPrice, setCurrentSpotPrice] = useState<number | undefined>(spotPrice);
   const [spotLoading, setSpotLoading] = useState<boolean>(false);
+  const [debugInfo, setDebugInfo] = useState<string | null>(null);
+
+  // Log information about the orders we receive for debugging
+  useEffect(() => {
+    console.log('OrderBook received orders:', {
+      buyOrdersCount: buyOrders?.length,
+      sellOrdersCount: sellOrders?.length,
+      firstBuyOrder: buyOrders?.[0] ? {
+        price: buyOrders[0].price,
+        amount: buyOrders[0].amount,
+        advNo: buyOrders[0].advNo,
+        type: typeof buyOrders[0].price,
+      } : 'No buy orders',
+      firstSellOrder: sellOrders?.[0] ? {
+        price: sellOrders[0].price,
+        amount: sellOrders[0].amount,
+        advNo: sellOrders[0].advNo,
+        type: typeof sellOrders[0].price,
+      } : 'No sell orders'
+    });
+
+    // Validate all orders to ensure they have proper data
+    const buyOrdersValid = buyOrders?.every(order => 
+      order && 
+      typeof order.price === 'number' && 
+      !isNaN(order.price) && 
+      typeof order.amount === 'number' && 
+      !isNaN(order.amount)
+    );
+    
+    const sellOrdersValid = sellOrders?.every(order => 
+      order && 
+      typeof order.price === 'number' && 
+      !isNaN(order.price) && 
+      typeof order.amount === 'number' && 
+      !isNaN(order.amount)
+    );
+
+    if (!buyOrdersValid || !sellOrdersValid) {
+      console.error('Invalid order data detected:', { buyOrdersValid, sellOrdersValid });
+      setDebugInfo('Some orders have invalid data. Check console for details.');
+    } else {
+      setDebugInfo(null);
+    }
+  }, [buyOrders, sellOrders]);
 
   // Map crypto symbols to CoinGecko IDs
   const cryptoIdMap: Record<string, string> = {
@@ -691,6 +758,9 @@ export const OrderBook = React.memo(({
     formatDelta
   }), [fiat]);
 
+  // Additional error state for empty orders
+  const hasEmptyOrders = (!loading && !error && buyOrders.length === 0 && sellOrders.length === 0);
+
   if (loading) {
     return (
       <Card>
@@ -721,6 +791,21 @@ export const OrderBook = React.memo(({
     );
   }
 
+  if (hasEmptyOrders) {
+    return (
+      <Card>
+        <CardHeader className="py-1">
+          <CardTitle className="text-xs">Order Book</CardTitle>
+        </CardHeader>
+        <CardContent className="p-2">
+          <div className="flex items-center justify-center h-24 text-muted-foreground text-xs">
+            No orders available for this pair. Try changing the currency pair.
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardHeader className="py-1">
@@ -736,6 +821,7 @@ export const OrderBook = React.memo(({
               (Spot: {formatPrice(currentSpotPrice)})
             </span>
           ) : null}
+          {debugInfo && <span className="ml-2 text-red-500 text-[10px]">{debugInfo}</span>}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-2">

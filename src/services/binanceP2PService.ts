@@ -82,21 +82,38 @@ export class BinanceP2PService {
           isValid: Boolean(lastOnlineTime)
         });
 
+        // Ensure data is properly parsed to the correct types
+        const price = parseFloat(item.adv.price);
+        const amount = parseFloat(item.adv.surplusAmount);
+        const minAmount = parseFloat(item.adv.minSingleTransAmount);
+        const maxAmount = parseFloat(item.adv.maxSingleTransAmount);
+
+        // Validate data before returning
+        if (isNaN(price) || isNaN(amount) || isNaN(minAmount) || isNaN(maxAmount)) {
+          console.error('Invalid number format in order data:', {
+            price: item.adv.price,
+            amount: item.adv.surplusAmount,
+            minAmount: item.adv.minSingleTransAmount, 
+            maxAmount: item.adv.maxSingleTransAmount
+          });
+          return null; // This will be filtered out by .filter(Boolean)
+        }
+
         return {
           advNo: item.adv.advNo,
-          price: item.adv.price,
-          amount: item.adv.surplusAmount,
-          minAmount: item.adv.minSingleTransAmount,
-          maxAmount: item.adv.maxSingleTransAmount,
-          paymentMethods: item.adv.tradeMethods.map((method: any) => method.identifier),
+          price: price,
+          amount: amount,
+          minAmount: minAmount,
+          maxAmount: maxAmount,
+          paymentMethods: item.adv.tradeMethods ? item.adv.tradeMethods.map((method: any) => method.identifier) : [],
           merchant: {
             name: item.advertiser.nickName,
-            rating: item.advertiser.positiveRate,
-            completedTrades: item.advertiser.monthOrderCount,
-            completionRate: item.advertiser.monthFinishRate,
-            lastOnlineTime,
-            userType: item.advertiser.userType,
-            userIdentity: item.advertiser.userIdentity
+            rating: item.advertiser.positiveRate || 0,
+            completedTrades: item.advertiser.monthOrderCount || 0,
+            completionRate: item.advertiser.monthFinishRate || 0,
+            lastOnlineTime: lastOnlineTime || 0,
+            userType: item.advertiser.userType || 'user',
+            userIdentity: item.advertiser.userIdentity || ''
           }
         };
       }).filter(Boolean);
@@ -123,6 +140,8 @@ export class BinanceP2PService {
         this.fetchOrders(fiat, crypto, 'BUY'),
         this.fetchOrders(fiat, crypto, 'SELL')
       ]);
+
+      this.log(`Got orders: Buy: ${buyOrders.length}, Sell: ${sellOrders.length}`);
 
       const buyOrdersChanged = this.hasOrdersChanged(buyOrders, this.previousBuyOrders);
       const sellOrdersChanged = this.hasOrdersChanged(sellOrders, this.previousSellOrders);
