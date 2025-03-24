@@ -29,6 +29,12 @@ export class OkxP2PService {
   private previousBuyOrders: Set<string> = new Set();
   private previousSellOrders: Set<string> = new Set();
 
+  constructor() {
+    console.log('⚠️ OKX P2P Service initialized with mock data for development');
+    console.log('The real OKX API endpoint needs to be determined and implemented');
+    console.log('--------------------------------------------------------------');
+  }
+
   private log(message: string) {
     console.log(`[OKX P2P] ${message}`);
   }

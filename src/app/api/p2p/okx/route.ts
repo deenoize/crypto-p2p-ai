@@ -137,6 +137,11 @@ export async function POST(req: NextRequest) {
       // For now, use mock data
       const mockData = generateMockOkxP2PData(fiat, crypto, tradeType);
       
+      console.log('===================================');
+      console.log('🔶 USING OKX MOCK DATA FOR DEVELOPMENT');
+      console.log(`Generated ${mockData.length} mock P2P orders for ${crypto}/${fiat}`);
+      console.log('===================================');
+      
       // Transform OKX data to match our expected format
       const transformedData = {
         success: true,
@@ -177,7 +182,11 @@ export async function POST(req: NextRequest) {
       // If the API call fails, still return mock data so the front-end works
       const mockData = generateMockOkxP2PData(fiat, crypto, tradeType);
       
-      console.log('Using mock OKX data after API error');
+      console.log('===================================');
+      console.log('🔴 OKX API ERROR - USING MOCK DATA INSTEAD');
+      console.log(`Error: ${apiError.message}`);
+      console.log(`Generated ${mockData.length} mock P2P orders for ${crypto}/${fiat}`);
+      console.log('===================================');
       
       return NextResponse.json({
         success: true,
