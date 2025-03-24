@@ -1,0 +1,2 @@
+Please replace this file with a screenshot of your application and name it 'preview.png'.
+The screenshot will be used in the README.md file. 
