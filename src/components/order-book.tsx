@@ -97,6 +97,7 @@ interface OrderBookProps {
   hasChanges?: boolean;
   spotPrice?: number;
   className?: string;
+  exchange?: string;
 }
 
 interface OrderTableProps {
@@ -408,6 +409,7 @@ export const OrderBook = React.memo(({
   hasChanges = false,
   spotPrice,
   className,
+  exchange = 'binance',
   ...props
 }: {
   fiat: string;
@@ -419,6 +421,7 @@ export const OrderBook = React.memo(({
   hasChanges?: boolean;
   spotPrice?: number;
   className?: string;
+  exchange?: string;
   [key: string]: any;
 }) => {
   const [currentSpotPrice, setCurrentSpotPrice] = useState<number | undefined>(spotPrice);
@@ -636,7 +639,7 @@ export const OrderBook = React.memo(({
         <CardHeader className="px-4 pt-4 pb-0">
           <CardTitle className="flex items-center gap-2 text-lg font-medium">
             <LineChart className="h-4 w-4" />
-            Order Book
+            {exchange.toUpperCase()} Order Book
             {currentSpotPrice && (
               <Badge variant="outline" className="bg-muted/50 text-xs rounded-sm px-1.5 py-0 h-5">
                 Spot: {formatPrice(currentSpotPrice)}
@@ -701,7 +704,7 @@ export const OrderBook = React.memo(({
         <CardHeader className="px-4 pt-4 pb-0">
           <CardTitle className="flex items-center gap-2 text-lg font-medium">
             <LineChart className="h-4 w-4" />
-            Order Book
+            {exchange.toUpperCase()} Order Book
             {currentSpotPrice && (
               <Badge variant="outline" className="bg-muted/50 text-xs rounded-sm px-1.5 py-0 h-5">
                 Spot: {formatPrice(currentSpotPrice)}
@@ -731,7 +734,7 @@ export const OrderBook = React.memo(({
         <CardHeader className="px-4 pt-4 pb-0">
           <CardTitle className="flex items-center gap-2 text-lg font-medium">
             <LineChart className="h-4 w-4" />
-            Order Book
+            {exchange.toUpperCase()} Order Book
             {currentSpotPrice && (
               <Badge variant="outline" className="bg-muted/50 text-xs rounded-sm px-1.5 py-0 h-5">
                 Spot: {formatPrice(currentSpotPrice)}
@@ -760,7 +763,7 @@ export const OrderBook = React.memo(({
       <CardHeader className="px-4 pt-4 pb-0">
         <CardTitle className="flex items-center gap-2 text-lg font-medium">
           <LineChart className="h-4 w-4" />
-          Order Book
+          {exchange.toUpperCase()} Order Book
           {currentSpotPrice && (
             <Badge variant="outline" className="bg-muted/50 text-xs rounded-sm px-1.5 py-0 h-5">
               Spot: {formatPrice(currentSpotPrice)}

@@ -15,6 +15,7 @@ import { DashboardShell } from "@/components/dashboard-shell";
 import { Sidebar } from "@/components/sidebar";
 import { OrderBook } from "@/components/order-book";
 import { binanceP2PService } from "@/services/binanceP2PService";
+import { okxP2PService } from "@/services/okxP2PService";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const POLLING_INTERVAL = 5000; // Poll every 5 seconds
@@ -38,20 +39,24 @@ export default function DashboardPage() {
     try {
       setLoading(true);
       setError(null);
-      console.log('Fetching orders...');
-      const data = await binanceP2PService.getOrders(fiat, crypto);
-      console.log('Orders fetched successfully:', {
+      console.log(`Fetching orders from ${exchange}...`);
+      
+      // Select the appropriate service based on exchange
+      const p2pService = exchange === 'okx' ? okxP2PService : binanceP2PService;
+      
+      const data = await p2pService.getOrders(fiat, crypto);
+      console.log(`${exchange.toUpperCase()} orders fetched successfully:`, {
         buyOrdersCount: data.buyOrders.length,
         sellOrdersCount: data.sellOrders.length
       });
       setOrders(data);
     } catch (err: any) {
-      console.error('Error in fetchOrders:', err);
-      setError(err.message || 'Failed to fetch orders. Please try again.');
+      console.error(`Error in fetchOrders from ${exchange}:`, err);
+      setError(err.message || `Failed to fetch orders from ${exchange}. Please try again.`);
     } finally {
       setLoading(false);
     }
-  }, [fiat, crypto]);
+  }, [fiat, crypto, exchange]);
 
   useEffect(() => {
     // Initial fetch
@@ -112,6 +117,7 @@ export default function DashboardPage() {
                   loading={loading}
                   error={error}
                   hasChanges={orders.hasChanges}
+                  exchange={exchange}
                 />
               </TabsContent>
             </Tabs>
