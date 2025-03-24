@@ -205,7 +205,7 @@ export const OrderRow = memo(({
           {isValidPrice && delta && (
             <div className="delta">
               <span>{formatDelta(delta.diff)}</span>
-              <span>({delta.percentage.toFixed(2)}%)</span>
+              <span>{delta.percentage > 0 ? '+' : ''}{delta.percentage.toFixed(2)}%</span>
             </div>
           )}
         </div>
