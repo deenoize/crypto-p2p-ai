@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo, memo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowDown, ArrowUp } from "lucide-react";
@@ -109,6 +109,7 @@ interface OrderTableProps {
   getMerchantTypeDisplay: (completedTrades: number, rating: number, completionRate: number) => string;
   formatDelta: (price: number, reference?: number) => string | null;
   spotPrice?: number;
+  onPositionChanged: (order: Order, newPosition: number) => void;
 }
 
 // Simplify OrderRow to focus only on rendering the static content
@@ -125,6 +126,7 @@ const OrderRow = React.memo(({
   formatDelta,
   className,
   spotPrice,
+  onPositionChanged,
   ...props
 }: {
   order: Order;
@@ -139,8 +141,30 @@ const OrderRow = React.memo(({
   formatDelta: (price: number, reference?: number) => string | null;
   className?: string;
   spotPrice?: number;
+  onPositionChanged: (order: Order, newPosition: number) => void;
   [key: string]: any;
 }) => {
+  const rowRef = useRef<HTMLTableRowElement>(null);
+  
+  // Add safe parsing for price and amount
+  const safePrice = useMemo(() => {
+    const price = Number(order.price);
+    return isNaN(price) ? null : price;
+  }, [order.price]);
+  
+  const safeAmount = useMemo(() => {
+    const amount = Number(order.amount);
+    return isNaN(amount) ? null : amount;
+  }, [order.amount]);
+
+  // Calculate delta with safe price
+  const delta = useMemo(() => {
+    if (!spotPrice || safePrice === null) return null;
+    const diff = safePrice - spotPrice;
+    const percentage = (diff / spotPrice) * 100;
+    return { diff, percentage };
+  }, [safePrice, spotPrice]);
+
   // Use useMemo for expensive calculations to prevent recalculation on re-render
   const merchantType = React.useMemo(() => {
     return getMerchantTypeDisplay(
@@ -150,27 +174,13 @@ const OrderRow = React.memo(({
     ) as MerchantType;
   }, [order.merchant.completedTrades, order.merchant.rating, order.merchant.completionRate, getMerchantTypeDisplay]);
 
-  // Directly calculate the delta text using the passed spotPrice
-  const deltaInfo = React.useMemo(() => {
-    let deltaText = null;
-    let deltaClass = '';
-    
-    if (spotPrice) {
-      const delta = ((order.price - spotPrice) / spotPrice) * 100;
-      deltaText = delta > 0 ? `+${delta.toFixed(2)}%` : `${delta.toFixed(2)}%`;
-      deltaClass = delta > 0 ? 'text-green-500' : delta < 0 ? 'text-red-500' : '';
-    }
-    
-    return { deltaText, deltaClass };
-  }, [order.price, spotPrice]);
-
   // Memoize the rendered content to prevent unnecessary re-renders
   const priceCell = React.useMemo(() => {
     // Debug check for price validity
-    const isValidPrice = typeof order.price === 'number' && !isNaN(order.price);
+    const isValidPrice = typeof safePrice === 'number' && !isNaN(safePrice);
     const priceDisplay = isValidPrice 
-      ? formatPrice(order.price)
-      : `Invalid (${typeof order.price}: ${order.price})`;
+      ? formatPrice(safePrice)
+      : <span className="invalid-data">Invalid price</span>;
     
     return (
       <TableCell className={cn(
@@ -180,22 +190,23 @@ const OrderRow = React.memo(({
       )}>
         <div className="flex flex-col">
           <span>{priceDisplay}</span>
-          {isValidPrice && deltaInfo.deltaText && (
-            <span className={cn("text-[10px]", deltaInfo.deltaClass)}>
-              {deltaInfo.deltaText}
-            </span>
+          {isValidPrice && delta && (
+            <div className="delta">
+              <span>{formatDelta(delta.diff)}</span>
+              <span>({delta.percentage.toFixed(2)}%)</span>
+            </div>
           )}
         </div>
       </TableCell>
     );
-  }, [formatPrice, order.price, type, deltaInfo]);
+  }, [formatPrice, safePrice, type, delta]);
 
   const amountCell = React.useMemo(() => {
     // Debug check for amount validity
-    const isValidAmount = typeof order.amount === 'number' && !isNaN(order.amount);
+    const isValidAmount = typeof safeAmount === 'number' && !isNaN(safeAmount);
     const amountDisplay = isValidAmount 
-      ? `${formatAmount(order.amount)} ${crypto}`
-      : `Invalid (${typeof order.amount}: ${order.amount})`;
+      ? `${formatAmount(safeAmount)} ${crypto}`
+      : <span className="invalid-data">Invalid amount</span>;
     
     return (
       <TableCell className={cn(
@@ -210,7 +221,7 @@ const OrderRow = React.memo(({
         </div>
       </TableCell>
     );
-  }, [formatAmount, formatLimit, order.amount, order.minAmount, order.maxAmount, crypto]);
+  }, [formatAmount, formatLimit, safeAmount, order.minAmount, order.maxAmount, crypto]);
 
   const paymentCell = React.useMemo(() => (
     <TableCell className="py-1 px-2">
@@ -265,6 +276,7 @@ const OrderRow = React.memo(({
 
   return (
     <TableRow 
+      ref={rowRef}
       className={cn("order-row", className)} 
       {...props}
     >
@@ -294,7 +306,8 @@ const OrderTable = React.memo(({
   formatLastOnline,
   getMerchantTypeDisplay,
   formatDelta,
-  spotPrice
+  spotPrice,
+  onPositionChanged
 }: OrderTableProps) => {
   // Keep track of orders that need to animate
   const prevOrdersRef = useRef<Record<string, Order>>({});
@@ -530,6 +543,7 @@ const OrderTable = React.memo(({
                 data-new={isNew ? "true" : "false"}
                 data-index={orderPositions[order.advNo] ?? orders.indexOf(order)}
                 spotPrice={spotPrice}
+                onPositionChanged={onPositionChanged}
               />
             );
           })}
@@ -832,6 +846,9 @@ export const OrderBook = React.memo(({
             crypto={crypto}
             {...formattingProps}
             spotPrice={currentSpotPrice}
+            onPositionChanged={(order, newPosition) => {
+              // Implement the logic to update the position of the order in the table
+            }}
           />
           <OrderTable 
             orders={buyOrdersMemo} 
@@ -839,6 +856,9 @@ export const OrderBook = React.memo(({
             crypto={crypto}
             {...formattingProps}
             spotPrice={currentSpotPrice}
+            onPositionChanged={(order, newPosition) => {
+              // Implement the logic to update the position of the order in the table
+            }}
           />
         </div>
       </CardContent>
