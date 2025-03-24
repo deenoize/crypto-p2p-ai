@@ -280,11 +280,23 @@ const OrderTable = React.memo(({
   const ordersContainerRef = useRef<HTMLDivElement>(null);
   const tableBodyRef = useRef<HTMLTableSectionElement>(null);
   
+  // Create a reference for the animation frames to allow cancellation
+  const animationFramesRef = useRef<Record<string, number>>({});
+  
+  // Keep a record of all orders with their positions for stable rendering
+  const [orderPositions, setOrderPositions] = useState<Record<string, number>>({});
+  
   // Handle animations via DOM manipulation
   useEffect(() => {
     const container = ordersContainerRef.current;
     const tableBody = tableBodyRef.current;
     if (!container || !tableBody) return;
+    
+    // Cancel any ongoing animations to prevent conflicts
+    Object.values(animationFramesRef.current).forEach(frameId => {
+      cancelAnimationFrame(frameId);
+    });
+    animationFramesRef.current = {};
     
     // Create maps of current and previous orders by ID
     const currentOrdersMap: Record<string, Order> = {};
@@ -305,53 +317,111 @@ const OrderTable = React.memo(({
     const newOrderIds = currentOrderIds.filter(id => !prevIdsSet.has(id));
     const removedOrderIds = prevOrderIds.filter(id => !currentIdsSet.has(id));
     
+    // Update order positions map for stable rendering
+    const newPositions = { ...orderPositions };
+    
+    // Assign positions to new orders
+    newOrderIds.forEach(id => {
+      // Find position in the current order array
+      const position = currentOrderIds.indexOf(id);
+      newPositions[id] = position;
+    });
+    
+    // Remove positions for removed orders after animation completes
+    setTimeout(() => {
+      const positionsToUpdate = { ...orderPositions };
+      removedOrderIds.forEach(id => {
+        delete positionsToUpdate[id];
+      });
+      setOrderPositions(positionsToUpdate);
+    }, 500); // Wait for animation to complete
+
     // First, handle entering new orders
     newOrderIds.forEach(id => {
       const row = tableBody.querySelector(`[data-order-id="${id}"]`);
       if (row) {
-        // Mark the row as new and set initial state for animation
-        row.classList.add('order-new');
-        (row as HTMLElement).style.opacity = '0';
-        (row as HTMLElement).style.transform = 'translateY(-10px)';
+        // Set style properties directly on the DOM element
+        const element = row as HTMLElement;
         
-        // Trigger animation after a small delay to ensure the DOM is updated
-        setTimeout(() => {
-          (row as HTMLElement).style.transition = 'opacity 300ms ease-out, transform 300ms ease-out';
-          (row as HTMLElement).style.opacity = '1';
-          (row as HTMLElement).style.transform = 'translateY(0)';
+        // Set initial state - transparent and above its final position
+        element.style.opacity = '0';
+        element.style.transform = 'translateY(-15px)';
+        element.style.position = 'relative';
+        element.style.zIndex = '2';
+        element.style.pointerEvents = 'none'; // Prevent interaction during animation
+        
+        // Use requestAnimationFrame to ensure smooth animation
+        animationFramesRef.current[id] = requestAnimationFrame(() => {
+          // Add transition
+          element.style.transition = 'opacity 350ms ease-out, transform 350ms ease-out';
           
-          // Clean up transition after animation completes
+          // Set a small delay to ensure the browser processes the initial state
           setTimeout(() => {
-            row.classList.remove('order-new');
-            (row as HTMLElement).style.transition = '';
-          }, 300);
-        }, 50);
+            // Animate to final state
+            element.style.opacity = '1';
+            element.style.transform = 'translateY(0)';
+            
+            // Clean up after animation completes
+            setTimeout(() => {
+              element.style.zIndex = '1';
+              element.style.pointerEvents = 'auto';
+              element.style.transition = '';
+              element.style.position = 'relative';
+            }, 350);
+          }, 20);
+        });
       }
     });
     
-    // Handle exiting orders - we need to keep them in DOM temporarily
+    // Handle exiting orders - keep them in DOM and animate out
     removedOrderIds.forEach(id => {
       const row = tableBody.querySelector(`[data-order-id="${id}"]`);
       if (row) {
-        // Mark as removing and start exit animation
-        row.classList.add('order-removing');
-        (row as HTMLElement).style.transition = 'opacity 300ms ease-out, transform 300ms ease-out';
-        (row as HTMLElement).style.opacity = '0';
-        (row as HTMLElement).style.transform = 'translateY(10px)';
-        (row as HTMLElement).style.pointerEvents = 'none';
+        const element = row as HTMLElement;
         
-        // Remove from DOM after animation completes
-        setTimeout(() => {
-          if (row.parentNode) {
-            row.parentNode.removeChild(row);
-          }
-        }, 300);
+        // Save the element's current position before it's removed from the flow
+        const rect = element.getBoundingClientRect();
+        
+        // Prepare for exit animation
+        element.style.position = 'absolute';
+        element.style.top = `${rect.top}px`;
+        element.style.left = `${rect.left}px`;
+        element.style.width = `${rect.width}px`;
+        element.style.height = `${rect.height}px`;
+        element.style.zIndex = '0';
+        element.style.pointerEvents = 'none';
+        
+        // Use requestAnimationFrame for smooth animation
+        animationFramesRef.current[id] = requestAnimationFrame(() => {
+          element.style.transition = 'opacity 350ms ease-out, transform 350ms ease-out';
+          
+          // Set a small delay to ensure the browser processes the initial state
+          setTimeout(() => {
+            // Animate out
+            element.style.opacity = '0';
+            element.style.transform = 'translateY(15px)';
+            
+            // Remove the element from DOM after animation completes
+            setTimeout(() => {
+              if (element.parentNode) {
+                element.parentNode.removeChild(element);
+              }
+            }, 350);
+          }, 20);
+        });
       }
     });
     
     // Update our references for the next render
     prevOrdersRef.current = { ...currentOrdersMap };
     prevOrdersIdsRef.current = [...currentOrderIds];
+    
+    // Cleanup function to cancel animations when component unmounts
+    return () => {
+      Object.values(animationFramesRef.current).forEach(frameId => {
+        cancelAnimationFrame(frameId);
+      });
+    };
   }, [orders]);
   
   // Using a stable structure with a unique key for each order position
@@ -370,6 +440,7 @@ const OrderTable = React.memo(({
           table-layout: fixed;
           width: 100%;
           position: relative;
+          contain: content;
         }
         
         .order-book-table td {
@@ -377,23 +448,21 @@ const OrderTable = React.memo(({
           text-overflow: ellipsis;
         }
         
-        /* Ensure rows have proper stacking context */
+        /* Create a stable stacking context for proper animations */
         .order-row {
           position: relative;
           z-index: 1;
-          transition: none !important;
-        }
-        
-        /* Force hardware acceleration and prevent blinking */
-        .order-new, .order-removing {
-          will-change: opacity, transform;
+          transform: translate3d(0, 0, 0);
           backface-visibility: hidden;
+          perspective: 1000px;
+          contain: layout style;
+          will-change: transform, opacity;
         }
         
-        .order-removing {
-          position: absolute;
-          width: 100%;
-          z-index: 0;
+        /* Prevent flashing during transitions */
+        .order-book-table tbody {
+          position: relative;
+          contain: layout style paint;
         }
         
         /* Payment method badge hover effect */
@@ -437,6 +506,7 @@ const OrderTable = React.memo(({
                 className="order-row"
                 data-order-id={order.advNo}
                 data-new={isNew ? "true" : "false"}
+                data-index={orderPositions[order.advNo] ?? orders.indexOf(order)}
                 spotPrice={spotPrice}
               />
             );
@@ -553,9 +623,19 @@ export const OrderBook = React.memo(({
     fetchSpotPrice();
   }, [crypto, fiat, spotPrice, buyOrders, sellOrders]);
 
-  // Memoize the orders to prevent unnecessary re-renders
-  const buyOrdersMemo = React.useMemo(() => buyOrders, [JSON.stringify(buyOrders.map(o => o.advNo))]);
-  const sellOrdersMemo = React.useMemo(() => sellOrders, [JSON.stringify(sellOrders.map(o => o.advNo))]);
+  // Improved memoization strategy for orders that considers only ID changes
+  // This prevents unnecessary rerenders when the content changes but the IDs remain the same
+  const buyOrdersMemo = React.useMemo(() => buyOrders, [
+    // Only rerender if the IDs change, not the content
+    buyOrders.length,
+    // Join IDs to create a stable dependency
+    buyOrders.map(o => o.advNo).join(',')
+  ]);
+  
+  const sellOrdersMemo = React.useMemo(() => sellOrders, [
+    sellOrders.length,
+    sellOrders.map(o => o.advNo).join(',')
+  ]);
   
   const formatAmount = (amount: number) => amount.toLocaleString();
   const formatPrice = (price: number) => {
