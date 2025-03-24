@@ -147,10 +147,15 @@ const OrderRow = React.memo(({
     order.merchant.completionRate * 100
   ) as MerchantType;
 
-  // Calculate delta percentage if spot price is available
-  const delta = spotPrice ? ((order.price - spotPrice) / spotPrice) * 100 : undefined;
-  const deltaClass = delta ? (delta > 0 ? 'text-green-500' : delta < 0 ? 'text-red-500' : '') : '';
-  const deltaText = formatDelta(order.price, spotPrice);
+  // Directly calculate the delta text using the passed spotPrice
+  let deltaText = null;
+  let deltaClass = '';
+  
+  if (spotPrice) {
+    const delta = ((order.price - spotPrice) / spotPrice) * 100;
+    deltaText = delta > 0 ? `+${delta.toFixed(2)}%` : `${delta.toFixed(2)}%`;
+    deltaClass = delta > 0 ? 'text-green-500' : delta < 0 ? 'text-red-500' : '';
+  }
 
   return (
     <TableRow className={className} {...props}>
@@ -213,9 +218,11 @@ const OrderRow = React.memo(({
     </TableRow>
   );
 }, (prevProps, nextProps) => {
-  // Always return true to prevent re-renders once the order is rendered
-  // We handle animations separately from React's reconciliation
-  return prevProps.order.advNo === nextProps.order.advNo;
+  // Change the memoization comparator to include spot price changes
+  return (
+    prevProps.order.advNo === nextProps.order.advNo && 
+    prevProps.spotPrice === nextProps.spotPrice
+  );
 });
 
 // Create a completely stable OrderTable that doesn't re-render existing orders
@@ -529,7 +536,7 @@ export const OrderBook = React.memo(({
     formatLastOnline,
     getMerchantTypeDisplay,
     formatDelta
-  }), [fiat, currentSpotPrice]);
+  }), [fiat]);
 
   if (loading) {
     return (
