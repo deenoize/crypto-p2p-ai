@@ -2,7 +2,7 @@
 
 A modern, real-time P2P cryptocurrency trading platform with AI-powered insights and analysis. This dashboard helps traders identify the best opportunities in P2P markets with a beautiful, responsive interface.
 
-![Crypto P2P AI Dashboard](https://github.com/yourusername/crypto-p2p-ai/raw/main/public/preview.png)
+![Crypto P2P AI Dashboard](https://github.com/deenoize/crypto-p2p-ai/raw/main/public/preview.png)
 
 ## Features
 
@@ -33,7 +33,7 @@ A modern, real-time P2P cryptocurrency trading platform with AI-powered insights
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/crypto-p2p-ai.git
+git clone https://github.com/deenoize/crypto-p2p-ai.git
 cd crypto-p2p-ai
 ```
 
@@ -63,7 +63,7 @@ yarn dev
 
 This project can be easily deployed to Vercel:
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/git/external?repository-url=https%3A%2F%2Fgithub.com%2Fyourusername%2Fcrypto-p2p-ai)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/git/external?repository-url=https%3A%2F%2Fgithub.com%2Fdeenoize%2Fcrypto-p2p-ai)
 
 ## Contributing
 
