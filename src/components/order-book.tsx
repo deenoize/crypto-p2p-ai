@@ -343,8 +343,15 @@ export function OrderTable({
     return order.id || order.advNo;
   }, []);
 
+  // Create title based on type
+  const tableTitle = type === 'buy' ? "Buy Orders" : "Sell Orders";
+  const titleColorClass = type === 'buy' ? "bg-green-500/10 text-green-700 dark:bg-green-950/30 dark:text-green-400" : "bg-red-500/10 text-red-700 dark:bg-red-950/30 dark:text-red-400";
+
   return (
     <div className="order-table-container">
+      <div className={`py-2 px-3 font-medium text-sm ${titleColorClass}`}>
+        {tableTitle}
+      </div>
       <Table>
         <TableHeader>
           <TableRow className="header-row">

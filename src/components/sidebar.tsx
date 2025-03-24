@@ -38,11 +38,11 @@ export function Sidebar({
     <div className="relative h-full">
       <Card className={cn(
         "h-full transition-all duration-300 ease-in-out",
-        isCollapsed ? "w-16" : "w-64"
+        isCollapsed ? "w-12" : "w-32"
       )}>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 p-2">
           <CardTitle className={cn(
-            "transition-all duration-300 overflow-hidden",
+            "text-xs transition-all duration-300 overflow-hidden",
             isCollapsed ? "w-0 opacity-0" : "w-auto opacity-100"
           )}>
             Settings
@@ -50,60 +50,60 @@ export function Sidebar({
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 shrink-0"
+            className="h-6 w-6 shrink-0"
             onClick={() => setIsCollapsed(!isCollapsed)}
           >
             {isCollapsed ? (
-              <ChevronRightIcon className="h-4 w-4" />
+              <ChevronRightIcon className="h-3 w-3" />
             ) : (
-              <ChevronLeftIcon className="h-4 w-4" />
+              <ChevronLeftIcon className="h-3 w-3" />
             )}
           </Button>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-2">
           <div className={cn(
-            "space-y-6 transition-all duration-300",
+            "space-y-3 transition-all duration-300",
             isCollapsed ? "invisible w-0" : "visible w-auto"
           )}>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Exchange</label>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Exchange</label>
               <Select value={exchange} onValueChange={onExchangeChange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select exchange" />
+                <SelectTrigger className="h-7 text-xs">
+                  <SelectValue placeholder="Exchange" />
                 </SelectTrigger>
                 <SelectContent>
                   {exchanges.map((ex) => (
-                    <SelectItem key={ex} value={ex}>
+                    <SelectItem key={ex} value={ex} className="text-xs">
                       {ex.toUpperCase()}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Fiat Currency</label>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Fiat</label>
               <Select value={fiat} onValueChange={onFiatChange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select fiat currency" />
+                <SelectTrigger className="h-7 text-xs">
+                  <SelectValue placeholder="Fiat" />
                 </SelectTrigger>
                 <SelectContent>
                   {fiatCurrencies.map((f) => (
-                    <SelectItem key={f} value={f}>
+                    <SelectItem key={f} value={f} className="text-xs">
                       {f}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Crypto Currency</label>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Crypto</label>
               <Select value={crypto} onValueChange={onCryptoChange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select crypto currency" />
+                <SelectTrigger className="h-7 text-xs">
+                  <SelectValue placeholder="Crypto" />
                 </SelectTrigger>
                 <SelectContent>
                   {cryptoCurrencies.map((c) => (
-                    <SelectItem key={c} value={c}>
+                    <SelectItem key={c} value={c} className="text-xs">
                       {c}
                     </SelectItem>
                   ))}
