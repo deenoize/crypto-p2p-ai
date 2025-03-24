@@ -64,7 +64,7 @@ export class BinanceP2PService {
         throw new Error('Invalid API response structure');
       }
 
-      return response.data.data.map((item: any) => {
+      return response.data.data.map((item: any, index: number) => {
         console.log('Processing merchant data:', {
           name: item.advertiser.nickName,
           activeTimeInSecond: item.advertiser.activeTimeInSecond,
@@ -99,8 +99,12 @@ export class BinanceP2PService {
           return null; // This will be filtered out by .filter(Boolean)
         }
 
+        // Ensure we always have a valid advNo, or create a unique one
+        const advNo = item.adv.advNo || `generated-${tradeType}-${index}-${Date.now()}`;
+
         return {
-          advNo: item.adv.advNo,
+          advNo: advNo,
+          id: advNo, // Add id as alias for easier usage in UI
           price: price,
           amount: amount,
           minAmount: minAmount,

@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState, useMemo, memo } from 'react';
+import React, { useEffect, useRef, useState, useMemo, memo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowDown, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowUp, LineChart, Loader2, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
@@ -75,6 +75,7 @@ interface Order {
   maxAmount: number;
   paymentMethods: string[];
   advNo: string;
+  id?: string;
   merchant: {
     name: string;
     rating: number;
@@ -95,6 +96,7 @@ interface OrderBookProps {
   error?: string | null;
   hasChanges?: boolean;
   spotPrice?: number;
+  className?: string;
 }
 
 interface OrderTableProps {
@@ -113,7 +115,7 @@ interface OrderTableProps {
 }
 
 // Simplify OrderRow to focus only on rendering the static content
-const OrderRow = React.memo(({ 
+export const OrderRow = memo(({ 
   order,
   type,
   crypto,
@@ -145,6 +147,16 @@ const OrderRow = React.memo(({
   [key: string]: any;
 }) => {
   const rowRef = useRef<HTMLTableRowElement>(null);
+  
+  // Log order data for debugging
+  useEffect(() => {
+    console.log(`Rendering OrderRow for order:`, {
+      id: order.id || order.advNo,
+      price: order.price,
+      amount: order.amount,
+      type
+    });
+  }, [order, type]);
   
   // Add safe parsing for price and amount
   const safePrice = useMemo(() => {
@@ -295,8 +307,8 @@ const OrderRow = React.memo(({
 });
 
 // Create a completely stable OrderTable that doesn't re-render existing orders
-const OrderTable = React.memo(({ 
-  orders, 
+export function OrderTable({
+  orders,
   type,
   crypto,
   formatPrice,
@@ -307,319 +319,146 @@ const OrderTable = React.memo(({
   getMerchantTypeDisplay,
   formatDelta,
   spotPrice,
-  onPositionChanged
-}: OrderTableProps) => {
-  // Keep track of orders that need to animate
-  const prevOrdersRef = useRef<Record<string, Order>>({});
-  const prevOrdersIdsRef = useRef<string[]>([]);
-  const ordersContainerRef = useRef<HTMLDivElement>(null);
-  const tableBodyRef = useRef<HTMLTableSectionElement>(null);
-  
-  // Create a reference for the animation frames to allow cancellation
-  const animationFramesRef = useRef<Record<string, number>>({});
-  
-  // Keep a record of all orders with their positions for stable rendering
-  const [orderPositions, setOrderPositions] = useState<Record<string, number>>({});
-  
-  // Handle animations via DOM manipulation
+  onPositionChanged,
+}: OrderTableProps) {
+  // Debug logging of orders
   useEffect(() => {
-    const container = ordersContainerRef.current;
-    const tableBody = tableBodyRef.current;
-    if (!container || !tableBody) return;
-    
-    // Cancel any ongoing animations to prevent conflicts
-    Object.values(animationFramesRef.current).forEach(frameId => {
-      cancelAnimationFrame(frameId);
-    });
-    animationFramesRef.current = {};
-    
-    // Create maps of current and previous orders by ID
-    const currentOrdersMap: Record<string, Order> = {};
-    const currentOrderIds: string[] = orders.map(o => {
-      currentOrdersMap[o.advNo] = o;
-      return o.advNo;
-    });
-    
-    // Get references to previous orders
-    const prevOrdersMap = prevOrdersRef.current;
-    const prevOrderIds = prevOrdersIdsRef.current;
-    
-    // Create a Set for faster lookups
-    const currentIdsSet = new Set(currentOrderIds);
-    const prevIdsSet = new Set(prevOrderIds);
-    
-    // Find new and removed order IDs
-    const newOrderIds = currentOrderIds.filter(id => !prevIdsSet.has(id));
-    const removedOrderIds = prevOrderIds.filter(id => !currentIdsSet.has(id));
-    
-    // Update order positions map for stable rendering
-    const newPositions = { ...orderPositions };
-    
-    // Assign positions to new orders
-    newOrderIds.forEach(id => {
-      // Find position in the current order array
-      const position = currentOrderIds.indexOf(id);
-      newPositions[id] = position;
-    });
-    
-    // Remove positions for removed orders after animation completes
-    setTimeout(() => {
-      const positionsToUpdate = { ...orderPositions };
-      removedOrderIds.forEach(id => {
-        delete positionsToUpdate[id];
+    console.log(`${type} orders data:`, orders);
+    if (orders && orders.length > 0) {
+      const firstOrder = orders[0];
+      console.log('First order sample:', {
+        id: firstOrder.id || firstOrder.advNo,
+        price: firstOrder.price,
+        amount: firstOrder.amount
       });
-      setOrderPositions(positionsToUpdate);
-    }, 500); // Wait for animation to complete
+    } else {
+      console.log(`No ${type} orders available`);
+    }
+  }, [orders, type]);
 
-    // First, handle entering new orders
-    newOrderIds.forEach(id => {
-      const row = tableBody.querySelector(`[data-order-id="${id}"]`);
-      if (row) {
-        // Set style properties directly on the DOM element
-        const element = row as HTMLElement;
-        
-        // Set initial state - transparent and above its final position
-        element.style.opacity = '0';
-        element.style.transform = 'translateY(-15px)';
-        element.style.position = 'relative';
-        element.style.zIndex = '2';
-        element.style.pointerEvents = 'none'; // Prevent interaction during animation
-        
-        // Use requestAnimationFrame to ensure smooth animation
-        animationFramesRef.current[id] = requestAnimationFrame(() => {
-          // Add transition
-          element.style.transition = 'opacity 350ms ease-out, transform 350ms ease-out';
-          
-          // Set a small delay to ensure the browser processes the initial state
-          setTimeout(() => {
-            // Animate to final state
-            element.style.opacity = '1';
-            element.style.transform = 'translateY(0)';
-            
-            // Clean up after animation completes
-            setTimeout(() => {
-              element.style.zIndex = '1';
-              element.style.pointerEvents = 'auto';
-              element.style.transition = '';
-              element.style.position = 'relative';
-            }, 350);
-          }, 20);
-        });
-      }
-    });
-    
-    // Handle exiting orders - keep them in DOM and animate out
-    removedOrderIds.forEach(id => {
-      const row = tableBody.querySelector(`[data-order-id="${id}"]`);
-      if (row) {
-        const element = row as HTMLElement;
-        
-        // Save the element's current position before it's removed from the flow
-        const rect = element.getBoundingClientRect();
-        
-        // Prepare for exit animation
-        element.style.position = 'absolute';
-        element.style.top = `${rect.top}px`;
-        element.style.left = `${rect.left}px`;
-        element.style.width = `${rect.width}px`;
-        element.style.height = `${rect.height}px`;
-        element.style.zIndex = '0';
-        element.style.pointerEvents = 'none';
-        
-        // Use requestAnimationFrame for smooth animation
-        animationFramesRef.current[id] = requestAnimationFrame(() => {
-          element.style.transition = 'opacity 350ms ease-out, transform 350ms ease-out';
-          
-          // Set a small delay to ensure the browser processes the initial state
-          setTimeout(() => {
-            // Animate out
-            element.style.opacity = '0';
-            element.style.transform = 'translateY(15px)';
-            
-            // Remove the element from DOM after animation completes
-            setTimeout(() => {
-              if (element.parentNode) {
-                element.parentNode.removeChild(element);
-              }
-            }, 350);
-          }, 20);
-        });
-      }
-    });
-    
-    // Update our references for the next render
-    prevOrdersRef.current = { ...currentOrdersMap };
-    prevOrdersIdsRef.current = [...currentOrderIds];
-    
-    // Cleanup function to cancel animations when component unmounts
-    return () => {
-      Object.values(animationFramesRef.current).forEach(frameId => {
-        cancelAnimationFrame(frameId);
-      });
-    };
-  }, [orders]);
-  
-  // Using a stable structure with a unique key for each order position
+  // Get a unique ID for an order, preferring id over advNo
+  const getOrderId = useCallback((order: Order) => {
+    return order.id || order.advNo;
+  }, []);
+
   return (
-    <div className="flex-1" ref={ordersContainerRef}>
-      <div className={cn(
-        "flex items-center gap-1 px-2 py-1 sticky top-0 z-30 bg-background",
-        type === 'buy' ? "text-green-600" : "text-red-600"
-      )}>
-        {type === 'buy' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-        <h3 className="text-xs font-medium">{type === 'buy' ? 'Buy' : 'Sell'} Orders</h3>
-      </div>
-      <style jsx global>{`
-        /* Order animation styles */
-        .order-book-table {
-          table-layout: fixed;
-          width: 100%;
-          position: relative;
-          contain: content;
-        }
-        
-        .order-book-table td {
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        
-        /* Create a stable stacking context for proper animations */
-        .order-row {
-          position: relative;
-          z-index: 1;
-          transform: translate3d(0, 0, 0);
-          backface-visibility: hidden;
-          perspective: 1000px;
-          contain: layout style;
-          will-change: transform, opacity;
-        }
-        
-        /* Prevent flashing during transitions */
-        .order-book-table tbody {
-          position: relative;
-          contain: layout style paint;
-        }
-        
-        /* Payment method badge hover effect */
-        .payment-method-badge {
-          transition: all 0.2s ease;
-          position: relative;
-          word-break: keep-all;
-          white-space: normal;
-        }
-        
-        .payment-method-badge:hover {
-          z-index: 5;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-        }
-      `}</style>
-      <Table className="order-book-table">
-        <TableHeader className="sticky top-0 z-40 bg-background">
-          <TableRow>
-            <TableHead className="py-1 px-2 text-xs w-[12%] min-w-[70px]">Price</TableHead>
-            <TableHead className="py-1 px-2 text-xs w-[18%] min-w-[100px]">Amount</TableHead>
-            <TableHead className="py-1 px-2 text-xs w-[35%] min-w-[150px]">Payment</TableHead>
-            <TableHead className="py-1 px-2 text-xs w-[35%] min-w-[120px]">Merchant</TableHead>
+    <div className="order-table-container">
+      <Table>
+        <TableHeader>
+          <TableRow className="header-row">
+            <TableHead className="price-col">Price</TableHead>
+            <TableHead className="amount-col">Amount</TableHead>
+            <TableHead className="payment-col">Payment</TableHead>
+            <TableHead className="merchant-col">Merchant</TableHead>
           </TableRow>
         </TableHeader>
-        <TableBody ref={tableBodyRef}>
-          {orders.map((order) => {
-            const isNew = !prevOrdersRef.current[order.advNo];
-            return (
-              <OrderRow
-                key={order.advNo}
-                order={order}
-                type={type}
-                crypto={crypto}
-                formatPrice={formatPrice}
-                formatAmount={formatAmount}
-                formatLimit={formatLimit}
-                formatPercent={formatPercent}
-                formatLastOnline={formatLastOnline}
-                getMerchantTypeDisplay={getMerchantTypeDisplay}
-                formatDelta={formatDelta}
-                className="order-row"
-                data-order-id={order.advNo}
-                data-new={isNew ? "true" : "false"}
-                data-index={orderPositions[order.advNo] ?? orders.indexOf(order)}
-                spotPrice={spotPrice}
-                onPositionChanged={onPositionChanged}
-              />
-            );
-          })}
+        <TableBody>
+          {orders.length > 0 ? (
+            orders.map((order) => {
+              // Get a stable key for this order
+              const orderId = getOrderId(order);
+              
+              return (
+                <OrderRow
+                  key={orderId}
+                  order={order}
+                  type={type}
+                  crypto={crypto}
+                  formatPrice={formatPrice}
+                  formatAmount={formatAmount}
+                  formatLimit={formatLimit}
+                  formatPercent={formatPercent}
+                  formatLastOnline={formatLastOnline}
+                  getMerchantTypeDisplay={getMerchantTypeDisplay}
+                  formatDelta={formatDelta}
+                  spotPrice={spotPrice}
+                  onPositionChanged={onPositionChanged}
+                />
+              );
+            })
+          ) : (
+            <TableRow>
+              <TableCell colSpan={4} className="text-center py-4">
+                <div className="text-muted-foreground">No orders available</div>
+              </TableCell>
+            </TableRow>
+          )}
         </TableBody>
       </Table>
     </div>
   );
-}, (prevProps, nextProps) => {
-  // We need to update in two cases:
-  // 1. The order IDs have changed (new orders, removed orders, or reordering)
-  // 2. The spot price has changed (to update delta calculations)
-  const prevIds = prevProps.orders.map(o => o.advNo).join(',');
-  const nextIds = nextProps.orders.map(o => o.advNo).join(',');
-  const spotPriceChanged = prevProps.spotPrice !== nextProps.spotPrice;
-  
-  return prevIds === nextIds && !spotPriceChanged;
-});
+}
 
 export const OrderBook = React.memo(({ 
-  fiat, 
-  crypto, 
-  buyOrders = [], 
+  fiat,
+  crypto,
+  buyOrders = [],
   sellOrders = [],
   loading = false,
   error = null,
   hasChanges = false,
-  spotPrice
-}: OrderBookProps) => {
-  // Add state for spot price if not provided as a prop
+  spotPrice,
+  className,
+  ...props
+}: {
+  fiat: string;
+  crypto: string;
+  buyOrders?: Order[];
+  sellOrders?: Order[];
+  loading?: boolean;
+  error?: string | null;
+  hasChanges?: boolean;
+  spotPrice?: number;
+  className?: string;
+  [key: string]: any;
+}) => {
   const [currentSpotPrice, setCurrentSpotPrice] = useState<number | undefined>(spotPrice);
-  const [spotLoading, setSpotLoading] = useState<boolean>(false);
+  const [spotLoading, setSpotLoading] = useState(false);
   const [debugInfo, setDebugInfo] = useState<string | null>(null);
 
-  // Log information about the orders we receive for debugging
+  // Add debug validation for orders
   useEffect(() => {
-    console.log('OrderBook received orders:', {
-      buyOrdersCount: buyOrders?.length,
-      sellOrdersCount: sellOrders?.length,
-      firstBuyOrder: buyOrders?.[0] ? {
-        price: buyOrders[0].price,
-        amount: buyOrders[0].amount,
-        advNo: buyOrders[0].advNo,
-        type: typeof buyOrders[0].price,
-      } : 'No buy orders',
-      firstSellOrder: sellOrders?.[0] ? {
-        price: sellOrders[0].price,
-        amount: sellOrders[0].amount,
-        advNo: sellOrders[0].advNo,
-        type: typeof sellOrders[0].price,
-      } : 'No sell orders'
+    console.log('OrderBook received data:', {
+      buyOrdersCount: buyOrders?.length || 0,
+      sellOrdersCount: sellOrders?.length || 0,
+      hasChanges,
+      loading,
+      error
     });
 
-    // Validate all orders to ensure they have proper data
-    const buyOrdersValid = buyOrders?.every(order => 
-      order && 
-      typeof order.price === 'number' && 
-      !isNaN(order.price) && 
-      typeof order.amount === 'number' && 
-      !isNaN(order.amount)
-    );
-    
-    const sellOrdersValid = sellOrders?.every(order => 
-      order && 
-      typeof order.price === 'number' && 
-      !isNaN(order.price) && 
-      typeof order.amount === 'number' && 
-      !isNaN(order.amount)
-    );
-
-    if (!buyOrdersValid || !sellOrdersValid) {
-      console.error('Invalid order data detected:', { buyOrdersValid, sellOrdersValid });
-      setDebugInfo('Some orders have invalid data. Check console for details.');
-    } else {
-      setDebugInfo(null);
+    // Validate our order data
+    try {
+      if (buyOrders && buyOrders.length > 0) {
+        const firstBuyOrder = buyOrders[0];
+        console.log('First buy order:', firstBuyOrder);
+        
+        // Check data validity
+        if (!firstBuyOrder.id && !firstBuyOrder.advNo) {
+          console.error('Invalid buy order: Missing ID/advNo', firstBuyOrder);
+          setDebugInfo('Error: Buy orders have invalid structure - missing ID fields');
+        }
+      }
+      
+      if (sellOrders && sellOrders.length > 0) {
+        const firstSellOrder = sellOrders[0];
+        console.log('First sell order:', firstSellOrder);
+        
+        // Check data validity
+        if (!firstSellOrder.id && !firstSellOrder.advNo) {
+          console.error('Invalid sell order: Missing ID/advNo', firstSellOrder);
+          setDebugInfo('Error: Sell orders have invalid structure - missing ID fields');
+        }
+      }
+      
+      if ((buyOrders?.length === 0 && sellOrders?.length === 0) && !loading && !error) {
+        console.warn('Both buy and sell orders are empty, but no loading or error state.');
+        setDebugInfo('Warning: No orders available, but no loading or error state.');
+      }
+    } catch (err: any) {
+      console.error('Error validating order data:', err);
+      setDebugInfo(`Error validating order data: ${err.message}`);
     }
-  }, [buyOrders, sellOrders]);
+  }, [buyOrders, sellOrders, hasChanges, loading, error]);
 
   // Map crypto symbols to CoinGecko IDs
   const cryptoIdMap: Record<string, string> = {
@@ -777,14 +616,59 @@ export const OrderBook = React.memo(({
 
   if (loading) {
     return (
-      <Card>
-        <CardHeader className="py-1">
-          <CardTitle className="text-xs">Order Book</CardTitle>
+      <Card className={cn("col-span-1", className)}>
+        <CardHeader className="px-4 pt-4 pb-0">
+          <CardTitle className="flex items-center gap-2 text-lg font-medium">
+            <LineChart className="h-4 w-4" />
+            Order Book
+            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+            {hasChanges && !loading && (
+              <Badge variant="outline" className="text-[9px] rounded-sm px-1 py-0 h-4">
+                Updated
+              </Badge>
+            )}
+          </CardTitle>
         </CardHeader>
-        <CardContent className="p-2">
-          <div className="flex items-center justify-center h-24">
-            <div role="status" className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
-          </div>
+        <CardContent className="p-0">
+          {error ? (
+            <div className="p-4 text-center text-red-500">
+              <AlertTriangle className="h-4 w-4 inline-block mr-1" />
+              {error}
+            </div>
+          ) : debugInfo ? (
+            <div className="p-4 text-center text-amber-500 text-sm">
+              <AlertTriangle className="h-4 w-4 inline-block mr-1" />
+              {debugInfo}
+            </div>
+          ) : loading && (!buyOrders?.length || !sellOrders?.length) ? (
+            <div className="flex flex-col items-center justify-center min-h-[200px]">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
+              <p className="text-sm text-muted-foreground">Loading order book...</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-0 bg-muted/30 divide-x divide-border">
+              <OrderTable 
+                orders={buyOrdersMemo}
+                type="buy"
+                crypto={crypto}
+                {...formattingProps}
+                spotPrice={currentSpotPrice}
+                onPositionChanged={(order, newPosition) => {
+                  // Implement the logic to update the position of the order in the table
+                }}
+              />
+              <OrderTable 
+                orders={sellOrdersMemo}
+                type="sell"
+                crypto={crypto}
+                {...formattingProps}
+                spotPrice={currentSpotPrice}
+                onPositionChanged={(order, newPosition) => {
+                  // Implement the logic to update the position of the order in the table
+                }}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
     );
@@ -792,12 +676,22 @@ export const OrderBook = React.memo(({
 
   if (error) {
     return (
-      <Card>
-        <CardHeader className="py-1">
-          <CardTitle className="text-xs">Order Book</CardTitle>
+      <Card className={cn("col-span-1", className)}>
+        <CardHeader className="px-4 pt-4 pb-0">
+          <CardTitle className="flex items-center gap-2 text-lg font-medium">
+            <LineChart className="h-4 w-4" />
+            Order Book
+            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+            {hasChanges && !loading && (
+              <Badge variant="outline" className="text-[9px] rounded-sm px-1 py-0 h-4">
+                Updated
+              </Badge>
+            )}
+          </CardTitle>
         </CardHeader>
-        <CardContent className="p-2">
-          <div className="flex items-center justify-center h-24 text-red-500 text-xs">
+        <CardContent className="p-0">
+          <div className="p-4 text-center text-red-500">
+            <AlertTriangle className="h-4 w-4 inline-block mr-1" />
             {error}
           </div>
         </CardContent>
@@ -807,12 +701,22 @@ export const OrderBook = React.memo(({
 
   if (hasEmptyOrders) {
     return (
-      <Card>
-        <CardHeader className="py-1">
-          <CardTitle className="text-xs">Order Book</CardTitle>
+      <Card className={cn("col-span-1", className)}>
+        <CardHeader className="px-4 pt-4 pb-0">
+          <CardTitle className="flex items-center gap-2 text-lg font-medium">
+            <LineChart className="h-4 w-4" />
+            Order Book
+            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+            {hasChanges && !loading && (
+              <Badge variant="outline" className="text-[9px] rounded-sm px-1 py-0 h-4">
+                Updated
+              </Badge>
+            )}
+          </CardTitle>
         </CardHeader>
-        <CardContent className="p-2">
-          <div className="flex items-center justify-center h-24 text-muted-foreground text-xs">
+        <CardContent className="p-0">
+          <div className="p-4 text-center text-muted-foreground text-sm">
+            <AlertTriangle className="h-4 w-4 inline-block mr-1" />
             No orders available for this pair. Try changing the currency pair.
           </div>
         </CardContent>
@@ -821,46 +725,59 @@ export const OrderBook = React.memo(({
   }
 
   return (
-    <Card>
-      <CardHeader className="py-1">
-        <CardTitle className="text-xs flex items-center">
-          <span>Order Book</span>
-          {spotLoading ? (
-            <span className="ml-2 text-muted-foreground flex items-center">
-              <span className="h-3 w-3 animate-spin rounded-full border-b-2 border-gray-500 mr-1"></span>
-              Loading spot price...
-            </span>
-          ) : currentSpotPrice ? (
-            <span className="ml-2 text-muted-foreground">
-              (Spot: {formatPrice(currentSpotPrice)})
-            </span>
-          ) : null}
-          {debugInfo && <span className="ml-2 text-red-500 text-[10px]">{debugInfo}</span>}
+    <Card className={cn("col-span-1", className)}>
+      <CardHeader className="px-4 pt-4 pb-0">
+        <CardTitle className="flex items-center gap-2 text-lg font-medium">
+          <LineChart className="h-4 w-4" />
+          Order Book
+          {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+          {hasChanges && !loading && (
+            <Badge variant="outline" className="text-[9px] rounded-sm px-1 py-0 h-4">
+              Updated
+            </Badge>
+          )}
         </CardTitle>
       </CardHeader>
-      <CardContent className="p-2">
-        <div className="flex gap-2">
-          <OrderTable 
-            orders={sellOrdersMemo} 
-            type="sell"
-            crypto={crypto}
-            {...formattingProps}
-            spotPrice={currentSpotPrice}
-            onPositionChanged={(order, newPosition) => {
-              // Implement the logic to update the position of the order in the table
-            }}
-          />
-          <OrderTable 
-            orders={buyOrdersMemo} 
-            type="buy"
-            crypto={crypto}
-            {...formattingProps}
-            spotPrice={currentSpotPrice}
-            onPositionChanged={(order, newPosition) => {
-              // Implement the logic to update the position of the order in the table
-            }}
-          />
-        </div>
+      <CardContent className="p-0">
+        {error ? (
+          <div className="p-4 text-center text-red-500">
+            <AlertTriangle className="h-4 w-4 inline-block mr-1" />
+            {error}
+          </div>
+        ) : debugInfo ? (
+          <div className="p-4 text-center text-amber-500 text-sm">
+            <AlertTriangle className="h-4 w-4 inline-block mr-1" />
+            {debugInfo}
+          </div>
+        ) : loading && (!buyOrders?.length || !sellOrders?.length) ? (
+          <div className="flex flex-col items-center justify-center min-h-[200px]">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
+            <p className="text-sm text-muted-foreground">Loading order book...</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-0 bg-muted/30 divide-x divide-border">
+            <OrderTable 
+              orders={buyOrdersMemo}
+              type="buy"
+              crypto={crypto}
+              {...formattingProps}
+              spotPrice={currentSpotPrice}
+              onPositionChanged={(order, newPosition) => {
+                // Implement the logic to update the position of the order in the table
+              }}
+            />
+            <OrderTable 
+              orders={sellOrdersMemo}
+              type="sell"
+              crypto={crypto}
+              {...formattingProps}
+              spotPrice={currentSpotPrice}
+              onPositionChanged={(order, newPosition) => {
+                // Implement the logic to update the position of the order in the table
+              }}
+            />
+          </div>
+        )}
       </CardContent>
     </Card>
   );
