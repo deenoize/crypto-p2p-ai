@@ -268,18 +268,20 @@ export const OrderRow = memo(({
           >
             {merchantType}
           </Badge>
+          <span className="text-[10px] text-muted-foreground">{formatLastOnline(order.merchant.lastOnlineTime)}</span>
         </div>
         <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+          <span>{order.merchant.completedTrades} orders</span>
           <span>{formatPercent(order.merchant.rating * 100)}% pos</span>
           <span>{formatPercent(order.merchant.completionRate * 100)}% comp</span>
-          <span>{formatLastOnline(order.merchant.lastOnlineTime)}</span>
         </div>
       </div>
     </TableCell>
   ), [
     order.merchant.name, 
     order.merchant.rating, 
-    order.merchant.completionRate, 
+    order.merchant.completionRate,
+    order.merchant.completedTrades,
     order.merchant.lastOnlineTime,
     merchantType,
     formatPercent,
