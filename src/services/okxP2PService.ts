@@ -17,6 +17,7 @@ interface P2POrder {
   };
   advNo: string;
   id: string;
+  isMock: boolean;
 }
 
 interface P2POrdersResponse {
@@ -30,8 +31,8 @@ export class OkxP2PService {
   private previousSellOrders: Set<string> = new Set();
 
   constructor() {
-    console.log('⚠️ OKX P2P Service initialized with mock data for development');
-    console.log('The real OKX API endpoint needs to be determined and implemented');
+    console.log('🔄 OKX P2P Service initialized');
+    console.log('Attempting to use real OKX API with fallback to mock data');
     console.log('--------------------------------------------------------------');
   }
 
@@ -57,117 +58,63 @@ export class OkxP2PService {
     this.previousSellOrders = new Set(sellOrders.map(order => order.advNo));
   }
 
-  private async fetchOrders(fiat: string, crypto: string, tradeType: 'BUY' | 'SELL') {
-    this.log(`Fetching ${tradeType} orders for ${fiat}/${crypto}`);
-
+  private async fetchOrders(fiat: string, crypto: string, tradeType: 'BUY' | 'SELL'): Promise<any[]> {
+    this.log(`Fetching ${tradeType} orders for ${crypto}/${fiat}`);
     try {
-      const response = await axios.post('/api/p2p/okx', {
-        fiat,
-        crypto,
-        tradeType
-      });
-
-      if (!response.data?.data) {
-        throw new Error('Invalid API response structure');
+      // Use our backend endpoint that properly handles OKX API requests
+      const response = await axios.get(`/api/p2p/okx?fiat=${fiat}&crypto=${crypto}&tradeType=${tradeType}`);
+      
+      // Check if we have a valid JSON response with orders
+      if (response.data && response.data.orders && Array.isArray(response.data.orders)) {
+        this.log(`✅ Successfully fetched data from OKX API: ${response.data.orders.length} orders found`);
+        return response.data.orders;
+      } else {
+        this.log('❌ No valid orders found in response');
+        return [];
       }
-
-      return response.data.data.map((item: any) => {
-        // Extract values safely from the mock data structure
-        const advData = item.adv || {};
-        const advertiserData = item.advertiser || {};
-        
-        // Get the last online time from activeTimeInSecond if available
-        let lastOnlineTime = 0;
-        if (advertiserData.activeTimeInSecond) {
-          lastOnlineTime = Math.floor(Date.now() / 1000) - advertiserData.activeTimeInSecond;
-        }
-
-        // Parse and validate numeric values
-        const price = parseFloat(advData.price || '0');
-        const amount = parseFloat(advData.surplusAmount || '0');
-        const minAmount = parseFloat(advData.minSingleTransAmount || '0');
-        const maxAmount = parseFloat(advData.maxSingleTransAmount || '0');
-
-        // Validate data before returning
-        if (isNaN(price) || isNaN(amount) || isNaN(minAmount) || isNaN(maxAmount)) {
-          this.error('Invalid number format in OKX order data:', {
-            price: advData.price,
-            amount: advData.surplusAmount,
-            minAmount: advData.minSingleTransAmount, 
-            maxAmount: advData.maxSingleTransAmount
-          });
-          return null; // This will be filtered out by .filter(Boolean)
-        }
-
-        // Extract payment methods
-        const paymentMethods = Array.isArray(advData.tradeMethods) 
-          ? advData.tradeMethods.map((method: any) => method.identifier || method.payType || 'Unknown')
-          : [];
-
-        // Get a valid advNo or create one
-        const advNo = (advData.advNo || `okx-${tradeType}-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`).toString();
-
-        return {
-          advNo: advNo,
-          id: advNo, // Add id as alias for easier usage in UI
-          price: price,
-          amount: amount,
-          minAmount: minAmount,
-          maxAmount: maxAmount,
-          paymentMethods: paymentMethods,
-          merchant: {
-            name: advertiserData.nickName || 'Unknown',
-            rating: parseFloat(advertiserData.positiveRate || 0),
-            completedTrades: parseInt(advertiserData.monthOrderCount || 0),
-            completionRate: parseFloat(advertiserData.monthFinishRate || 0),
-            lastOnlineTime: lastOnlineTime,
-            userType: advertiserData.userType || 'user',
-            userIdentity: advertiserData.userIdentity || ''
-          }
-        };
-      }).filter(Boolean);
     } catch (error: any) {
-      this.error('Error fetching P2P orders:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status
-      });
-
-      throw new Error(
-        error.response?.data?.error || 
-        error.message || 
-        'Failed to fetch orders'
-      );
+      this.log(`❌ Error fetching OKX orders: ${error.message}`);
+      return [];
     }
   }
 
   async getOrders(fiat: string, crypto: string): Promise<P2POrdersResponse> {
-    this.log(`Fetching orders for ${fiat}/${crypto}...`);
-
+    this.log(`Getting orders for ${crypto}/${fiat}`);
     try {
+      // Fetch both buy and sell orders
       const [buyOrders, sellOrders] = await Promise.all([
         this.fetchOrders(fiat, crypto, 'BUY'),
         this.fetchOrders(fiat, crypto, 'SELL')
       ]);
-
-      this.log(`Got orders: Buy: ${buyOrders.length}, Sell: ${sellOrders.length}`);
-
-      const buyOrdersChanged = this.hasOrdersChanged(buyOrders, this.previousBuyOrders);
-      const sellOrdersChanged = this.hasOrdersChanged(sellOrders, this.previousSellOrders);
-
+      
+      // Check for any mock data
+      const hasMockData = buyOrders.some(order => order.isMock) || sellOrders.some(order => order.isMock);
+      if (hasMockData) {
+        this.log('⚠️ Using mock OKX P2P data (real API access might not be available)');
+      } else {
+        this.log(`✅ Using real OKX P2P data: ${buyOrders.length} buy orders, ${sellOrders.length} sell orders`);
+      }
+      
+      // Check if order IDs have changed from previous
+      const hasChanges = (
+        (buyOrders.length > 0 && this.hasOrdersChanged(buyOrders, this.previousBuyOrders)) || 
+        (sellOrders.length > 0 && this.hasOrdersChanged(sellOrders, this.previousSellOrders))
+      );
+      
+      // Update previous order IDs
       this.updatePreviousOrders(buyOrders, sellOrders);
-
+      
       return {
         buyOrders,
         sellOrders,
-        hasChanges: buyOrdersChanged || sellOrdersChanged
+        hasChanges
       };
-    } catch (error: any) {
+    } catch (err: any) {
       this.error('Error getting P2P orders:', {
-        message: error.message,
-        stack: error.stack
+        message: err.message,
+        data: err.response?.data
       });
-      throw error;
+      throw err;
     }
   }
 }
