@@ -54,11 +54,7 @@ export class BinanceP2PService {
     this.log(`Fetching ${tradeType} orders for ${fiat}/${crypto}`);
 
     try {
-      const response = await axios.post('/api/p2p', {
-        fiat,
-        crypto,
-        tradeType
-      });
+      const response = await axios.get(`/api/p2p/binance?fiat=${fiat}&crypto=${crypto}&tradeType=${tradeType}`);
 
       if (!response.data?.data) {
         throw new Error('Invalid API response structure');
@@ -147,14 +143,22 @@ export class BinanceP2PService {
 
       this.log(`Got orders: Buy: ${buyOrders.length}, Sell: ${sellOrders.length}`);
 
-      const buyOrdersChanged = this.hasOrdersChanged(buyOrders, this.previousBuyOrders);
-      const sellOrdersChanged = this.hasOrdersChanged(sellOrders, this.previousSellOrders);
+      // Sort buy orders from lowest to highest price (ascending)
+      const sortedBuyOrders = [...buyOrders].sort((a, b) => a.price - b.price);
+      
+      // Sort sell orders from highest to lowest price (descending)
+      const sortedSellOrders = [...sellOrders].sort((a, b) => b.price - a.price);
 
-      this.updatePreviousOrders(buyOrders, sellOrders);
+      this.log(`Sorted orders: Buy orders ascending (smaller first), Sell orders descending (bigger first)`);
+
+      const buyOrdersChanged = this.hasOrdersChanged(sortedBuyOrders, this.previousBuyOrders);
+      const sellOrdersChanged = this.hasOrdersChanged(sortedSellOrders, this.previousSellOrders);
+
+      this.updatePreviousOrders(sortedBuyOrders, sortedSellOrders);
 
       return {
-        buyOrders,
-        sellOrders,
+        buyOrders: sortedBuyOrders,
+        sellOrders: sortedSellOrders,
         hasChanges: buyOrdersChanged || sellOrdersChanged
       };
     } catch (error: any) {

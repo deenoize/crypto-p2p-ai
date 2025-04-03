@@ -1,8 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { PaymentMethodsAnalysis } from '@/components/PaymentMethodsAnalysis';
-import { RegionalMarketAnalysis } from '@/components/RegionalMarketAnalysis';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MarketOverview } from "@/components/market-overview";
@@ -14,6 +12,7 @@ import { DashboardHeader } from "@/components/dashboard-header";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { Sidebar } from "@/components/sidebar";
 import { OrderBook } from "@/components/order-book";
+import { P2PComparison } from "@/components/p2p-comparison";
 import { binanceP2PService } from "@/services/binanceP2PService";
 import { okxP2PService } from "@/services/okxP2PService";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -92,21 +91,22 @@ export default function DashboardPage() {
             <Tabs defaultValue="overview" className="space-y-4">
               <TabsList>
                 <TabsTrigger value="overview">Overview</TabsTrigger>
-                <TabsTrigger value="payment-methods">Payment Methods</TabsTrigger>
-                <TabsTrigger value="regions">Regions</TabsTrigger>
                 <TabsTrigger value="order-book">Order Book</TabsTrigger>
+                <TabsTrigger value="p2p-comparison">P2P Comparison</TabsTrigger>
               </TabsList>
               <TabsContent value="overview" className="space-y-4">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <MarketOverview />
-                  <OrderBookAnalysis />
+                  <MarketOverview 
+                    exchange={exchange}
+                    fiat={fiat}
+                    crypto={crypto}
+                  />
+                  <OrderBookAnalysis 
+                    exchange={exchange}
+                    fiat={fiat}
+                    crypto={crypto}
+                  />
                 </div>
-              </TabsContent>
-              <TabsContent value="payment-methods">
-                <PaymentMethodsAnalysis fiat={fiat} crypto={crypto} />
-              </TabsContent>
-              <TabsContent value="regions">
-                <RegionalMarketAnalysis fiat={fiat} crypto={crypto} />
               </TabsContent>
               <TabsContent value="order-book">
                 <OrderBook 
@@ -118,6 +118,12 @@ export default function DashboardPage() {
                   error={error}
                   hasChanges={orders.hasChanges}
                   exchange={exchange}
+                />
+              </TabsContent>
+              <TabsContent value="p2p-comparison">
+                <P2PComparison 
+                  fiat={fiat}
+                  crypto={crypto}
                 />
               </TabsContent>
             </Tabs>

@@ -4,6 +4,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ArrowDown, ArrowUp, LineChart, Loader2, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const CURRENCY_SYMBOLS: { [key: string]: string } = {
   'USD': '$',
@@ -98,6 +100,7 @@ interface OrderBookProps {
   spotPrice?: number;
   className?: string;
   exchange?: string;
+  selectedPaymentMethod?: string;
 }
 
 interface OrderTableProps {
@@ -181,10 +184,10 @@ export const OrderRow = memo(({
   // Use useMemo for expensive calculations to prevent recalculation on re-render
   const merchantType = React.useMemo(() => {
     return getMerchantTypeDisplay(
-      order.merchant.completedTrades,
-      order.merchant.rating * 100,
-      order.merchant.completionRate * 100
-    ) as MerchantType;
+    order.merchant.completedTrades,
+    order.merchant.rating * 100,
+    order.merchant.completionRate * 100
+  ) as MerchantType;
   }, [order.merchant.completedTrades, order.merchant.rating, order.merchant.completionRate, getMerchantTypeDisplay]);
 
   // Memoize the rendered content to prevent unnecessary re-renders
@@ -194,8 +197,8 @@ export const OrderRow = memo(({
     const priceDisplay = isValidPrice 
       ? formatPrice(safePrice)
       : <span className="invalid-data">Invalid price</span>;
-    
-    return (
+
+  return (
       <TableCell className={cn(
         "py-1 px-2 text-xs whitespace-nowrap",
         type === 'buy' ? "text-green-600" : "text-red-600",
@@ -237,47 +240,47 @@ export const OrderRow = memo(({
   }, [formatAmount, formatLimit, safeAmount, order.minAmount, order.maxAmount, crypto]);
 
   const paymentCell = React.useMemo(() => (
-    <TableCell className="py-1 px-2">
-      <div className="flex flex-wrap gap-1 max-w-full">
-        {order.paymentMethods.map((method, i) => (
-          <Badge 
-            key={i} 
-            variant="outline" 
-            className={cn(
-              "payment-method-badge px-2 py-0.5 my-0.5 text-[10px] transition-all duration-200 hover:bg-muted inline-block",
-              getPaymentMethodColor(method)
-            )}
-          >
-            {method}
-          </Badge>
-        ))}
-      </div>
-    </TableCell>
+      <TableCell className="py-1 px-2">
+        <div className="flex flex-wrap gap-1 max-w-full">
+          {order.paymentMethods.map((method, i) => (
+            <Badge 
+              key={i} 
+              variant="outline" 
+              className={cn(
+                "payment-method-badge px-2 py-0.5 my-0.5 text-[10px] transition-all duration-200 hover:bg-muted inline-block",
+                getPaymentMethodColor(method)
+              )}
+            >
+              {method}
+            </Badge>
+          ))}
+        </div>
+      </TableCell>
   ), [order.paymentMethods]);
 
   const merchantCell = React.useMemo(() => (
-    <TableCell className="py-1 px-2">
-      <div className="flex flex-col gap-0.5">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-1">
-          <span className="font-medium text-xs truncate max-w-full">{order.merchant.name}</span>
-          <Badge 
-            variant="outline" 
-            className={cn(
-              "px-1.5 py-0 text-[10px] transition-all duration-200 whitespace-nowrap flex-shrink-0",
-              MERCHANT_TYPE_COLORS[merchantType]
-            )}
-          >
-            {merchantType}
-          </Badge>
+      <TableCell className="py-1 px-2">
+        <div className="flex flex-col gap-0.5">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1">
+            <span className="font-medium text-xs truncate max-w-full">{order.merchant.name}</span>
+            <Badge 
+              variant="outline" 
+              className={cn(
+                "px-1.5 py-0 text-[10px] transition-all duration-200 whitespace-nowrap flex-shrink-0",
+                MERCHANT_TYPE_COLORS[merchantType]
+              )}
+            >
+              {merchantType}
+            </Badge>
           <span className="text-[10px] text-muted-foreground">{formatLastOnline(order.merchant.lastOnlineTime)}</span>
-        </div>
-        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+          </div>
+          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
           <span>{order.merchant.completedTrades} orders</span>
-          <span>{formatPercent(order.merchant.rating * 100)}% pos</span>
-          <span>{formatPercent(order.merchant.completionRate * 100)}% comp</span>
+            <span>{formatPercent(order.merchant.rating * 100)}% pos</span>
+            <span>{formatPercent(order.merchant.completionRate * 100)}% comp</span>
+          </div>
         </div>
-      </div>
-    </TableCell>
+      </TableCell>
   ), [
     order.merchant.name, 
     order.merchant.rating, 
@@ -311,7 +314,7 @@ export const OrderRow = memo(({
 
 // Create a completely stable OrderTable that doesn't re-render existing orders
 export function OrderTable({
-  orders,
+  orders, 
   type,
   crypto,
   formatPrice,
@@ -368,18 +371,18 @@ export function OrderTable({
               // Get a stable key for this order
               const orderId = getOrderId(order);
               
-              return (
-                <OrderRow
+            return (
+              <OrderRow
                   key={orderId}
-                  order={order}
-                  type={type}
-                  crypto={crypto}
-                  formatPrice={formatPrice}
-                  formatAmount={formatAmount}
-                  formatLimit={formatLimit}
-                  formatPercent={formatPercent}
-                  formatLastOnline={formatLastOnline}
-                  getMerchantTypeDisplay={getMerchantTypeDisplay}
+                order={order}
+                type={type}
+                crypto={crypto}
+                formatPrice={formatPrice}
+                formatAmount={formatAmount}
+                formatLimit={formatLimit}
+                formatPercent={formatPercent}
+                formatLastOnline={formatLastOnline}
+                getMerchantTypeDisplay={getMerchantTypeDisplay}
                   formatDelta={formatDelta}
                   spotPrice={spotPrice}
                   onPositionChanged={onPositionChanged}
@@ -399,10 +402,33 @@ export function OrderTable({
   );
 }
 
+// Adding a component to display mock data notice
+const MockDataNotice = ({ visible = false, reason = '' }) => {
+  if (!visible) return null;
+  
+  return (
+    <div className="rounded-md p-3 mb-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800">
+      <div className="flex items-start">
+        <div className="flex-shrink-0">
+          <AlertTriangle className="h-5 w-5 text-yellow-500" />
+        </div>
+        <div className="ml-3">
+          <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-400">
+            Using Mock Data
+          </h3>
+          <div className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">
+            <p>{reason || "This data is simulated and does not represent real market conditions."}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const OrderBook = React.memo(({ 
-  fiat,
-  crypto,
-  buyOrders = [],
+  fiat, 
+  crypto, 
+  buyOrders = [], 
   sellOrders = [],
   loading = false,
   error = null,
@@ -410,23 +436,42 @@ export const OrderBook = React.memo(({
   spotPrice,
   className,
   exchange = 'binance',
+  selectedPaymentMethod,
   ...props
-}: {
-  fiat: string;
-  crypto: string;
-  buyOrders?: Order[];
-  sellOrders?: Order[];
-  loading?: boolean;
-  error?: string | null;
-  hasChanges?: boolean;
-  spotPrice?: number;
-  className?: string;
-  exchange?: string;
-  [key: string]: any;
-}) => {
+}: OrderBookProps) => {
   const [currentSpotPrice, setCurrentSpotPrice] = useState<number | undefined>(spotPrice);
   const [spotLoading, setSpotLoading] = useState(false);
   const [debugInfo, setDebugInfo] = useState<string | null>(null);
+  const [isMockData, setIsMockData] = useState(false);
+  const [mockReason, setMockReason] = useState('');
+
+  // Filter orders by payment method
+  const filteredBuyOrders = React.useMemo(() => {
+    if (!selectedPaymentMethod || selectedPaymentMethod === 'all') return buyOrders;
+    return buyOrders.filter(order => order.paymentMethods.includes(selectedPaymentMethod));
+  }, [buyOrders, selectedPaymentMethod]);
+
+  const filteredSellOrders = React.useMemo(() => {
+    if (!selectedPaymentMethod || selectedPaymentMethod === 'all') return sellOrders;
+    return sellOrders.filter(order => order.paymentMethods.includes(selectedPaymentMethod));
+  }, [sellOrders, selectedPaymentMethod]);
+
+  // Check if we're using mock data
+  useEffect(() => {
+    if (buyOrders && buyOrders.length > 0) {
+      // Check for mock data indicators in the order ID/advNo
+      const firstOrder = buyOrders[0];
+      if (firstOrder.advNo && (firstOrder.advNo.includes('mock') || firstOrder.advNo.includes('okx-mock'))) {
+        setIsMockData(true);
+        setMockReason(exchange === 'okx' 
+          ? "OKX P2P API endpoints are not publicly accessible. Using generated mock data instead." 
+          : "Using generated mock data for demonstration purposes.");
+      } else {
+        setIsMockData(false);
+        setMockReason('');
+      }
+    }
+  }, [buyOrders, exchange]);
 
   // Add debug validation for orders
   useEffect(() => {
@@ -462,9 +507,14 @@ export const OrderBook = React.memo(({
         }
       }
       
-      if ((buyOrders?.length === 0 && sellOrders?.length === 0) && !loading && !error) {
+      // Only show the warning if we've received the initial data and there are no orders
+      if (!loading && !error && buyOrders && sellOrders && 
+          Array.isArray(buyOrders) && Array.isArray(sellOrders) &&
+          buyOrders.length === 0 && sellOrders.length === 0) {
         console.warn('Both buy and sell orders are empty, but no loading or error state.');
         setDebugInfo('Warning: No orders available, but no loading or error state.');
+      } else {
+        setDebugInfo(null);
       }
     } catch (err: any) {
       console.error('Error validating order data:', err);
@@ -670,27 +720,34 @@ export const OrderBook = React.memo(({
               <p className="text-sm text-muted-foreground">Loading order book...</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-0 bg-muted/30 divide-x divide-border">
-              <OrderTable 
-                orders={buyOrdersMemo}
-                type="buy"
-                crypto={crypto}
-                {...formattingProps}
-                spotPrice={currentSpotPrice}
-                onPositionChanged={(order, newPosition) => {
-                  // Implement the logic to update the position of the order in the table
-                }}
-              />
-              <OrderTable 
-                orders={sellOrdersMemo}
-                type="sell"
-                crypto={crypto}
-                {...formattingProps}
-                spotPrice={currentSpotPrice}
-                onPositionChanged={(order, newPosition) => {
-                  // Implement the logic to update the position of the order in the table
-                }}
-              />
+            <div className={cn(
+              "grid gap-0 bg-muted/30 divide-x divide-border",
+              (buyOrdersMemo.length > 0 && sellOrdersMemo.length > 0) ? "grid-cols-2" : "grid-cols-1"
+            )}>
+              {buyOrdersMemo.length > 0 && (
+                <OrderTable 
+                  orders={buyOrdersMemo}
+                  type="buy"
+                  crypto={crypto}
+                  {...formattingProps}
+                  spotPrice={currentSpotPrice}
+                  onPositionChanged={(order, newPosition) => {
+                    // Implement the logic to update the position of the order in the table
+                  }}
+                />
+              )}
+              {sellOrdersMemo.length > 0 && (
+                <OrderTable 
+                  orders={sellOrdersMemo}
+                  type="sell"
+                  crypto={crypto}
+                  {...formattingProps}
+                  spotPrice={currentSpotPrice}
+                  onPositionChanged={(order, newPosition) => {
+                    // Implement the logic to update the position of the order in the table
+                  }}
+                />
+              )}
             </div>
           )}
         </CardContent>
@@ -778,25 +835,24 @@ export const OrderBook = React.memo(({
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0">
-        {error ? (
-          <div className="p-4 text-center text-red-500">
-            <AlertTriangle className="h-4 w-4 inline-block mr-1" />
-            {error}
-          </div>
-        ) : debugInfo ? (
+        <div className="px-4 pt-4">
+          <MockDataNotice visible={isMockData} reason={mockReason} />
+        </div>
+        
+        {debugInfo && (
           <div className="p-4 text-center text-amber-500 text-sm">
             <AlertTriangle className="h-4 w-4 inline-block mr-1" />
             {debugInfo}
           </div>
-        ) : loading && (!buyOrders?.length || !sellOrders?.length) ? (
-          <div className="flex flex-col items-center justify-center min-h-[200px]">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
-            <p className="text-sm text-muted-foreground">Loading order book...</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-0 bg-muted/30 divide-x divide-border">
+        )}
+        
+        <div className={cn(
+          "grid gap-0 bg-muted/30 divide-x divide-border",
+          (filteredBuyOrders.length > 0 && filteredSellOrders.length > 0) ? "grid-cols-2" : "grid-cols-1"
+        )}>
+          {filteredBuyOrders.length > 0 && (
             <OrderTable 
-              orders={buyOrdersMemo}
+              orders={filteredBuyOrders}
               type="buy"
               crypto={crypto}
               {...formattingProps}
@@ -805,8 +861,10 @@ export const OrderBook = React.memo(({
                 // Implement the logic to update the position of the order in the table
               }}
             />
+          )}
+          {filteredSellOrders.length > 0 && (
             <OrderTable 
-              orders={sellOrdersMemo}
+              orders={filteredSellOrders}
               type="sell"
               crypto={crypto}
               {...formattingProps}
@@ -815,8 +873,8 @@ export const OrderBook = React.memo(({
                 // Implement the logic to update the position of the order in the table
               }}
             />
-          </div>
-        )}
+          )}
+        </div>
       </CardContent>
     </Card>
   );

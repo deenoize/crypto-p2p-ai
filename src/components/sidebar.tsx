@@ -38,7 +38,7 @@ export function Sidebar({
     <div className="relative h-full">
       <Card className={cn(
         "h-full transition-all duration-300 ease-in-out",
-        isCollapsed ? "w-12" : "w-32"
+        isCollapsed ? "w-6" : "w-32"
       )}>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 p-2">
           <CardTitle className={cn(
