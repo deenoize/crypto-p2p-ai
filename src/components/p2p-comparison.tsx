@@ -24,8 +24,7 @@ interface P2PComparisonProps {
 type OrderType = 'all' | 'buy' | 'sell';
 
 interface ComparisonState {
-  leftExchange: string;
-  rightExchange: string;
+  selectedExchanges: string[];
   leftOrders: {
     buyOrders: any[];
     sellOrders: any[];
@@ -46,8 +45,7 @@ interface ComparisonState {
 
 export function P2PComparison({ fiat, crypto }: P2PComparisonProps) {
   const [comparison, setComparison] = useState<ComparisonState>({
-    leftExchange: 'binance',
-    rightExchange: 'okx',
+    selectedExchanges: ['binance', 'okx'],
     leftOrders: {
       buyOrders: [],
       sellOrders: []
@@ -63,6 +61,8 @@ export function P2PComparison({ fiat, crypto }: P2PComparisonProps) {
     isLoading: false,
     error: null
   });
+
+  const exchanges = ['binance', 'htx', 'bybit', 'okx'];
 
   // Get unique payment methods from orders based on order type
   const getPaymentMethods = (orders: { buyOrders: any[]; sellOrders: any[] }, orderType: OrderType) => {
@@ -97,8 +97,14 @@ export function P2PComparison({ fiat, crypto }: P2PComparisonProps) {
         ]);
 
         setComparison(prev => {
-          const leftOrders = prev.leftExchange === 'binance' ? binanceOrders : okxOrders;
-          const rightOrders = prev.rightExchange === 'binance' ? binanceOrders : okxOrders;
+          const [firstExchange, secondExchange] = prev.selectedExchanges.slice(0, 2);
+          const leftOrders = firstExchange === 'binance' ? binanceOrders 
+            : firstExchange === 'okx' ? okxOrders 
+            : { buyOrders: [], sellOrders: [] };
+          
+          const rightOrders = secondExchange === 'binance' ? binanceOrders 
+            : secondExchange === 'okx' ? okxOrders 
+            : { buyOrders: [], sellOrders: [] };
           
           return {
             ...prev,
@@ -119,7 +125,7 @@ export function P2PComparison({ fiat, crypto }: P2PComparisonProps) {
     fetchOrders();
     const interval = setInterval(fetchOrders, 10000);
     return () => clearInterval(interval);
-  }, [fiat, crypto, comparison.leftExchange, comparison.rightExchange]);
+  }, [fiat, crypto, comparison.selectedExchanges]);
 
   // When order type changes, reset payment methods to 'all' if current methods aren't available
   const updatePaymentMethods = (side: 'left' | 'right') => {
@@ -206,187 +212,140 @@ export function P2PComparison({ fiat, crypto }: P2PComparisonProps) {
           <CardTitle>P2P Exchange Comparison</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="space-y-4">
             <div>
-              <Label>Left Exchange</Label>
-              <Select
-                value={comparison.leftExchange}
-                onValueChange={(value: string) => setComparison(prev => ({ ...prev, leftExchange: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="binance">Binance</SelectItem>
-                  <SelectItem value="okx">OKX</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label className="mb-2">Exchanges:</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {exchanges.map((exchange) => (
+                  <button
+                    key={exchange}
+                    type="button"
+                    onClick={() => {
+                      setComparison(prev => {
+                        const newExchanges = prev.selectedExchanges.includes(exchange)
+                          ? prev.selectedExchanges.filter(e => e !== exchange)
+                          : [...prev.selectedExchanges, exchange];
+                        // Ensure at least one exchange is selected
+                        return {
+                          ...prev,
+                          selectedExchanges: newExchanges.length ? newExchanges : prev.selectedExchanges
+                        };
+                      });
+                    }}
+                    className={cn(
+                      "px-2 py-0.5 rounded-full text-[11px] border transition-colors flex items-center gap-1.5",
+                      comparison.selectedExchanges.includes(exchange)
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-background hover:bg-muted border-input"
+                    )}
+                    disabled={comparison.selectedExchanges.length === 1 && comparison.selectedExchanges.includes(exchange)}
+                  >
+                    {exchange === 'binance' && (
+                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 0L7.172 4.828L12 9.656L16.828 4.828L12 0Z"/>
+                        <path d="M4.828 7.172L0 12L4.828 16.828L9.656 12L4.828 7.172Z"/>
+                        <path d="M19.172 7.172L14.344 12L19.172 16.828L24 12L19.172 7.172Z"/>
+                        <path d="M12 14.344L7.172 19.172L12 24L16.828 19.172L12 14.344Z"/>
+                      </svg>
+                    )}
+                    {exchange === 'htx' && (
+                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 24c6.627 0 12-5.373 12-12S18.627 0 12 0 0 5.373 0 12s5.373 12 12 12z"/>
+                      </svg>
+                    )}
+                    {exchange === 'bybit' && (
+                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="12" cy="12" r="12"/>
+                      </svg>
+                    )}
+                    {exchange === 'okx' && (
+                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 24c6.627 0 12-5.373 12-12S18.627 0 12 0 0 5.373 0 12s5.373 12 12 12z"/>
+                      </svg>
+                    )}
+                    {exchange.toUpperCase()}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div>
-              <Label>Right Exchange</Label>
-              <Select
-                value={comparison.rightExchange}
-                onValueChange={(value: string) => setComparison(prev => ({ ...prev, rightExchange: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="binance">Binance</SelectItem>
-                  <SelectItem value="okx">OKX</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="w-full">
-              <h3 className="text-lg font-semibold mb-2">{comparison.leftExchange.toUpperCase()}</h3>
-              <div className="space-y-4">
-                <div>
-                  <Tabs
-                    value={comparison.leftOrderType}
-                    onValueChange={handleLeftOrderTypeChange}
-                    className="w-full"
-                  >
-                    <TabsList className="grid w-full grid-cols-3">
-                      <TabsTrigger value="all">All</TabsTrigger>
-                      <TabsTrigger value="buy">Buy</TabsTrigger>
-                      <TabsTrigger value="sell">Sell</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                </div>
-                <div>
-                  <Label>Methods:</Label>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setComparison(prev => ({ ...prev, leftPaymentMethods: ['all'] }));
-                      }}
-                      className={cn(
-                        "px-2 py-0.5 rounded-full text-[11px] border transition-colors",
-                        comparison.leftPaymentMethods.includes('all')
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "bg-background hover:bg-muted border-input"
-                      )}
-                    >
-                      All
-                    </button>
-                    {leftPaymentMethodOptions.filter(method => method !== 'all').map((method: string) => (
-                      <button
-                        key={method}
-                        type="button"
-                        onClick={() => {
-                          setComparison(prev => {
-                            const newMethods = prev.leftPaymentMethods.includes('all')
-                              ? [method]
-                              : prev.leftPaymentMethods.includes(method)
-                                ? prev.leftPaymentMethods.filter(m => m !== method)
-                                : [...prev.leftPaymentMethods, method];
-                            return { ...prev, leftPaymentMethods: newMethods.length ? newMethods : ['all'] };
-                          });
-                        }}
-                        className={cn(
-                          "px-2 py-0.5 rounded-full text-[11px] border transition-colors",
-                          comparison.leftPaymentMethods.includes(method)
-                            ? "bg-primary text-primary-foreground border-primary"
-                            : "bg-background hover:bg-muted border-input"
-                        )}
+            <div className="grid grid-cols-2 gap-4">
+              {comparison.selectedExchanges.slice(0, 2).map((exchange, index) => (
+                <div key={exchange} className="w-full">
+                  <h3 className="text-lg font-semibold mb-2">{exchange.toUpperCase()}</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <Tabs
+                        value={index === 0 ? comparison.leftOrderType : comparison.rightOrderType}
+                        onValueChange={index === 0 ? handleLeftOrderTypeChange : handleRightOrderTypeChange}
+                        className="w-full"
                       >
-                        {method}
-                      </button>
-                    ))}
+                        <TabsList className="grid w-full grid-cols-3">
+                          <TabsTrigger value="all">All</TabsTrigger>
+                          <TabsTrigger value="buy">Buy</TabsTrigger>
+                          <TabsTrigger value="sell">Sell</TabsTrigger>
+                        </TabsList>
+                      </Tabs>
+                    </div>
+                    <div>
+                      <Label>Methods:</Label>
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setComparison(prev => ({ ...prev, leftPaymentMethods: ['all'] }));
+                          }}
+                          className={cn(
+                            "px-2 py-0.5 rounded-full text-[11px] border transition-colors",
+                            comparison.leftPaymentMethods.includes('all')
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "bg-background hover:bg-muted border-input"
+                          )}
+                        >
+                          All
+                        </button>
+                        {leftPaymentMethodOptions.filter(method => method !== 'all').map((method: string) => (
+                          <button
+                            key={method}
+                            type="button"
+                            onClick={() => {
+                              setComparison(prev => {
+                                const newMethods = prev.leftPaymentMethods.includes('all')
+                                  ? [method]
+                                  : prev.leftPaymentMethods.includes(method)
+                                    ? prev.leftPaymentMethods.filter(m => m !== method)
+                                    : [...prev.leftPaymentMethods, method];
+                                return { ...prev, leftPaymentMethods: newMethods.length ? newMethods : ['all'] };
+                              });
+                            }}
+                            className={cn(
+                              "px-2 py-0.5 rounded-full text-[11px] border transition-colors",
+                              comparison.leftPaymentMethods.includes(method)
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "bg-background hover:bg-muted border-input"
+                            )}
+                          >
+                            {method}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <OrderBook
+                      fiat={fiat}
+                      crypto={crypto}
+                      buyOrders={index === 0 ? leftFilteredOrders.buyOrders : rightFilteredOrders.buyOrders}
+                      sellOrders={index === 0 ? leftFilteredOrders.sellOrders : rightFilteredOrders.sellOrders}
+                      loading={comparison.isLoading}
+                      error={comparison.error}
+                      exchange={exchange}
+                      hasChanges={index === 0 ? comparison.leftOrders.hasChanges : comparison.rightOrders.hasChanges}
+                      className="w-full"
+                    />
                   </div>
                 </div>
-              </div>
-              <div className="mt-4">
-                <OrderBook
-                  fiat={fiat}
-                  crypto={crypto}
-                  buyOrders={leftFilteredOrders.buyOrders}
-                  sellOrders={leftFilteredOrders.sellOrders}
-                  loading={comparison.isLoading}
-                  error={comparison.error}
-                  exchange={comparison.leftExchange}
-                  hasChanges={comparison.leftOrders.hasChanges}
-                  className="w-full"
-                />
-              </div>
-            </div>
-            <div className="w-full">
-              <h3 className="text-lg font-semibold mb-2">{comparison.rightExchange.toUpperCase()}</h3>
-              <div className="space-y-4">
-                <div>
-                  <Tabs
-                    value={comparison.rightOrderType}
-                    onValueChange={handleRightOrderTypeChange}
-                    className="w-full"
-                  >
-                    <TabsList className="grid w-full grid-cols-3">
-                      <TabsTrigger value="all">All</TabsTrigger>
-                      <TabsTrigger value="buy">Buy</TabsTrigger>
-                      <TabsTrigger value="sell">Sell</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                </div>
-                <div>
-                  <Label>Methods:</Label>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setComparison(prev => ({ ...prev, rightPaymentMethods: ['all'] }));
-                      }}
-                      className={cn(
-                        "px-2 py-0.5 rounded-full text-[11px] border transition-colors",
-                        comparison.rightPaymentMethods.includes('all')
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "bg-background hover:bg-muted border-input"
-                      )}
-                    >
-                      All
-                    </button>
-                    {rightPaymentMethodOptions.filter(method => method !== 'all').map((method: string) => (
-                      <button
-                        key={method}
-                        type="button"
-                        onClick={() => {
-                          setComparison(prev => {
-                            const newMethods = prev.rightPaymentMethods.includes('all')
-                              ? [method]
-                              : prev.rightPaymentMethods.includes(method)
-                                ? prev.rightPaymentMethods.filter(m => m !== method)
-                                : [...prev.rightPaymentMethods, method];
-                            return { ...prev, rightPaymentMethods: newMethods.length ? newMethods : ['all'] };
-                          });
-                        }}
-                        className={cn(
-                          "px-2 py-0.5 rounded-full text-[11px] border transition-colors",
-                          comparison.rightPaymentMethods.includes(method)
-                            ? "bg-primary text-primary-foreground border-primary"
-                            : "bg-background hover:bg-muted border-input"
-                        )}
-                      >
-                        {method}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="mt-4">
-                <OrderBook
-                  fiat={fiat}
-                  crypto={crypto}
-                  buyOrders={rightFilteredOrders.buyOrders}
-                  sellOrders={rightFilteredOrders.sellOrders}
-                  loading={comparison.isLoading}
-                  error={comparison.error}
-                  exchange={comparison.rightExchange}
-                  hasChanges={comparison.rightOrders.hasChanges}
-                  className="w-full"
-                />
-              </div>
+              ))}
             </div>
           </div>
         </CardContent>
