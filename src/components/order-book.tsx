@@ -101,6 +101,10 @@ interface OrderBookProps {
   className?: string;
   exchange?: string;
   selectedPaymentMethod?: string;
+  onOrderSelect?: (order: Order, type: 'buy' | 'sell') => void;
+  selectedBuyOrder?: Order | null;
+  selectedSellOrder?: Order | null;
+  side?: 'left' | 'right';
 }
 
 interface OrderTableProps {
@@ -116,6 +120,9 @@ interface OrderTableProps {
   formatDelta: (price: number, reference?: number) => string | null;
   spotPrice?: number;
   onPositionChanged: (order: Order, newPosition: number) => void;
+  onOrderSelect?: (order: Order, type: 'buy' | 'sell') => void;
+  selectedBuyOrder?: Order | null;
+  selectedSellOrder?: Order | null;
 }
 
 // Simplify OrderRow to focus only on rendering the static content
@@ -133,6 +140,8 @@ export const OrderRow = memo(({
   className,
   spotPrice,
   onPositionChanged,
+  onSelect,
+  isSelected,
   ...props
 }: {
   order: Order;
@@ -148,6 +157,8 @@ export const OrderRow = memo(({
   className?: string;
   spotPrice?: number;
   onPositionChanged: (order: Order, newPosition: number) => void;
+  onSelect?: () => void;
+  isSelected?: boolean;
   [key: string]: any;
 }) => {
   const rowRef = useRef<HTMLTableRowElement>(null);
@@ -295,7 +306,19 @@ export const OrderRow = memo(({
   return (
     <TableRow 
       ref={rowRef}
-      className={cn("order-row", className)} 
+      className={cn(
+        "cursor-pointer hover:bg-muted/50 transition-colors",
+        isSelected && "bg-muted/70 border-l-2 border-l-primary",
+        className
+      )}
+      onClick={() => {
+        console.log('Order clicked:', {
+          id: order.id || order.advNo,
+          type,
+          isSelected
+        });
+        onSelect?.();
+      }}
       {...props}
     >
       {priceCell}
@@ -326,76 +349,69 @@ export function OrderTable({
   formatDelta,
   spotPrice,
   onPositionChanged,
+  onOrderSelect,
+  selectedBuyOrder,
+  selectedSellOrder,
 }: OrderTableProps) {
-  // Debug logging of orders
+  const [ordersState, setOrdersState] = useState(orders);
+
   useEffect(() => {
-    console.log(`${type} orders data:`, orders);
-    if (orders && orders.length > 0) {
-      const firstOrder = orders[0];
-      console.log('First order sample:', {
-        id: firstOrder.id || firstOrder.advNo,
-        price: firstOrder.price,
-        amount: firstOrder.amount
-      });
-    } else {
-      console.log(`No ${type} orders available`);
+    setOrdersState(orders);
+  }, [orders]);
+
+  const handleOrderSelect = useCallback((order: Order) => {
+    if (onOrderSelect) {
+      onOrderSelect(order, type);
     }
-  }, [orders, type]);
+  }, [onOrderSelect, type]);
 
-  // Get a unique ID for an order, preferring id over advNo
-  const getOrderId = useCallback((order: Order) => {
-    return order.id || order.advNo;
-  }, []);
+  const isOrderSelected = useCallback((order: Order) => {
+    if (type === 'buy') {
+      return selectedBuyOrder?.advNo === order.advNo;
+    } else {
+      return selectedSellOrder?.advNo === order.advNo;
+    }
+  }, [selectedBuyOrder, selectedSellOrder, type]);
 
-  // Create title based on type
-  const tableTitle = type === 'buy' ? "Buy Orders" : "Sell Orders";
-  const titleColorClass = type === 'buy' ? "bg-green-500/10 text-green-700 dark:bg-green-950/30 dark:text-green-400" : "bg-red-500/10 text-red-700 dark:bg-red-950/30 dark:text-red-400";
+  if (!ordersState.length) {
+    return (
+      <div className="text-center py-4 text-sm text-muted-foreground">
+        No orders available for this pair
+      </div>
+    );
+  }
 
   return (
-    <div className="order-table-container">
-      <div className={`py-2 px-3 font-medium text-sm ${titleColorClass}`}>
-        {tableTitle}
-      </div>
+    <div className="relative">
       <Table>
         <TableHeader>
-          <TableRow className="header-row">
-            <TableHead className="price-col">Price</TableHead>
-            <TableHead className="amount-col">Amount</TableHead>
-            <TableHead className="payment-col">Payment</TableHead>
-            <TableHead className="merchant-col">Merchant</TableHead>
+          <TableRow>
+            <TableHead className="w-[100px]">Price</TableHead>
+            <TableHead>Amount</TableHead>
+            <TableHead>Payment</TableHead>
+            <TableHead>Merchant</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {orders.length > 0 ? (
-            orders.map((order) => {
-              // Get a stable key for this order
-              const orderId = getOrderId(order);
-              
-            return (
-              <OrderRow
-                  key={orderId}
-                order={order}
-                type={type}
-                crypto={crypto}
-                formatPrice={formatPrice}
-                formatAmount={formatAmount}
-                formatLimit={formatLimit}
-                formatPercent={formatPercent}
-                formatLastOnline={formatLastOnline}
-                getMerchantTypeDisplay={getMerchantTypeDisplay}
-                  formatDelta={formatDelta}
-                  spotPrice={spotPrice}
-                  onPositionChanged={onPositionChanged}
-                />
-              );
-            })
-          ) : (
-            <TableRow>
-              <TableCell colSpan={4} className="text-center py-4">
-                <div className="text-muted-foreground">No orders available</div>
-              </TableCell>
-            </TableRow>
-          )}
+          {ordersState.map((order, index) => (
+            <OrderRow
+              key={order.advNo}
+              order={order}
+              type={type}
+              crypto={crypto}
+              formatPrice={formatPrice}
+              formatAmount={formatAmount}
+              formatLimit={formatLimit}
+              formatPercent={formatPercent}
+              formatLastOnline={formatLastOnline}
+              getMerchantTypeDisplay={getMerchantTypeDisplay}
+              formatDelta={formatDelta}
+              spotPrice={spotPrice}
+              onPositionChanged={(order) => onPositionChanged(order, index)}
+              onSelect={() => handleOrderSelect(order)}
+              isSelected={isOrderSelected(order)}
+            />
+          ))}
         </TableBody>
       </Table>
     </div>
@@ -437,7 +453,10 @@ export const OrderBook = React.memo(({
   className,
   exchange = 'binance',
   selectedPaymentMethod,
-  ...props
+  onOrderSelect,
+  selectedBuyOrder,
+  selectedSellOrder,
+  side
 }: OrderBookProps) => {
   const [currentSpotPrice, setCurrentSpotPrice] = useState<number | undefined>(spotPrice);
   const [spotLoading, setSpotLoading] = useState(false);
@@ -734,6 +753,9 @@ export const OrderBook = React.memo(({
                   onPositionChanged={(order, newPosition) => {
                     // Implement the logic to update the position of the order in the table
                   }}
+                  onOrderSelect={onOrderSelect}
+                  selectedBuyOrder={selectedBuyOrder}
+                  selectedSellOrder={selectedSellOrder}
                 />
               )}
               {sellOrdersMemo.length > 0 && (
@@ -746,6 +768,9 @@ export const OrderBook = React.memo(({
                   onPositionChanged={(order, newPosition) => {
                     // Implement the logic to update the position of the order in the table
                   }}
+                  onOrderSelect={onOrderSelect}
+                  selectedBuyOrder={selectedBuyOrder}
+                  selectedSellOrder={selectedSellOrder}
                 />
               )}
             </div>
@@ -860,6 +885,9 @@ export const OrderBook = React.memo(({
               onPositionChanged={(order, newPosition) => {
                 // Implement the logic to update the position of the order in the table
               }}
+              onOrderSelect={onOrderSelect}
+              selectedBuyOrder={selectedBuyOrder}
+              selectedSellOrder={selectedSellOrder}
             />
           )}
           {filteredSellOrders.length > 0 && (
@@ -872,6 +900,9 @@ export const OrderBook = React.memo(({
               onPositionChanged={(order, newPosition) => {
                 // Implement the logic to update the position of the order in the table
               }}
+              onOrderSelect={onOrderSelect}
+              selectedBuyOrder={selectedBuyOrder}
+              selectedSellOrder={selectedSellOrder}
             />
           )}
         </div>

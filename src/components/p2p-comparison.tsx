@@ -15,6 +15,28 @@ import { Badge } from "@/components/ui/badge";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { SpreadComparisonDialog } from './spread-comparison-dialog';
+import { toast } from "sonner";
+import { Toaster } from "sonner";
+
+interface Order {
+  id?: string;
+  advNo: string;
+  price: number;
+  amount: number;
+  minAmount: number;
+  maxAmount: number;
+  paymentMethods: string[];
+  merchant: {
+    name: string;
+    rating: number;
+    completedTrades: number;
+    completionRate: number;
+    lastOnlineTime: number;
+    userType: string;
+    userIdentity: string;
+  }
+}
 
 interface P2PComparisonProps {
   fiat: string;
@@ -41,6 +63,13 @@ interface ComparisonState {
   rightPaymentMethods: string[];
   isLoading: boolean;
   error: string | null;
+  selectedBuyOrder: any | null;
+  selectedSellOrder: any | null;
+  isSpreadDialogOpen: boolean;
+}
+
+interface OrderWithType extends Order {
+  orderType: 'buy' | 'sell';
 }
 
 export function P2PComparison({ fiat, crypto }: P2PComparisonProps) {
@@ -59,33 +88,85 @@ export function P2PComparison({ fiat, crypto }: P2PComparisonProps) {
     leftPaymentMethods: ['all'],
     rightPaymentMethods: ['all'],
     isLoading: false,
-    error: null
+    error: null,
+    selectedBuyOrder: null,
+    selectedSellOrder: null,
+    isSpreadDialogOpen: false
   });
 
   const exchanges = ['binance', 'htx', 'bybit', 'okx'];
 
-  // Get unique payment methods from orders based on order type
-  const getPaymentMethods = (orders: { buyOrders: any[]; sellOrders: any[] }, orderType: OrderType) => {
+  // Get unique payment methods from orders based on order type and exchange
+  const getPaymentMethods = (orders: { buyOrders: any[]; sellOrders: any[] }, orderType: OrderType, exchange: string) => {
     const methods = new Set<string>();
     methods.add('all');
     
+    // Filter orders based on exchange
+    const exchangeOrders = {
+      buyOrders: orders.buyOrders.filter(order => order.exchange === exchange),
+      sellOrders: orders.sellOrders.filter(order => order.exchange === exchange)
+    };
+    
     if (orderType === 'all' || orderType === 'buy') {
-      orders.buyOrders.forEach(order => {
-        order.paymentMethods.forEach((method: string) => methods.add(method));
+      exchangeOrders.buyOrders.forEach(order => {
+        if (order.paymentMethods) {
+          order.paymentMethods.forEach((method: string) => methods.add(method));
+        }
       });
     }
     
     if (orderType === 'all' || orderType === 'sell') {
-      orders.sellOrders.forEach(order => {
-        order.paymentMethods.forEach((method: string) => methods.add(method));
+      exchangeOrders.sellOrders.forEach(order => {
+        if (order.paymentMethods) {
+          order.paymentMethods.forEach((method: string) => methods.add(method));
+        }
       });
     }
     
     return Array.from(methods);
   };
 
-  const leftPaymentMethodOptions = getPaymentMethods(comparison.leftOrders, comparison.leftOrderType);
-  const rightPaymentMethodOptions = getPaymentMethods(comparison.rightOrders, comparison.rightOrderType);
+  // Filter orders based on selected order type and payment methods
+  const getFilteredOrders = (orders: { buyOrders: any[]; sellOrders: any[] }, orderType: OrderType, selectedPaymentMethods: string[], exchange: string) => {
+    // First filter by exchange
+    let filteredOrders = {
+      buyOrders: orders.buyOrders.filter(order => order.exchange === exchange),
+      sellOrders: orders.sellOrders.filter(order => order.exchange === exchange)
+    };
+
+    // Then filter by order type
+    switch (orderType) {
+      case 'buy':
+        filteredOrders = {
+          buyOrders: filteredOrders.buyOrders,
+          sellOrders: []
+        };
+        break;
+      case 'sell':
+        filteredOrders = {
+          buyOrders: [],
+          sellOrders: filteredOrders.sellOrders
+        };
+        break;
+    }
+
+    // Finally filter by payment methods if not just 'all'
+    if (!selectedPaymentMethods.includes('all')) {
+      filteredOrders = {
+        buyOrders: filteredOrders.buyOrders.filter(order => 
+          order.paymentMethods && order.paymentMethods.some((method: string) => selectedPaymentMethods.includes(method))
+        ),
+        sellOrders: filteredOrders.sellOrders.filter(order => 
+          order.paymentMethods && order.paymentMethods.some((method: string) => selectedPaymentMethods.includes(method))
+        )
+      };
+    }
+
+    return filteredOrders;
+  };
+
+  const leftPaymentMethodOptions = getPaymentMethods(comparison.leftOrders, comparison.leftOrderType, comparison.selectedExchanges[0]);
+  const rightPaymentMethodOptions = getPaymentMethods(comparison.rightOrders, comparison.rightOrderType, comparison.selectedExchanges[1]);
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -98,12 +179,30 @@ export function P2PComparison({ fiat, crypto }: P2PComparisonProps) {
 
         setComparison(prev => {
           const [firstExchange, secondExchange] = prev.selectedExchanges.slice(0, 2);
-          const leftOrders = firstExchange === 'binance' ? binanceOrders 
-            : firstExchange === 'okx' ? okxOrders 
+          
+          // Add exchange information to orders
+          const leftOrders = firstExchange === 'binance' 
+            ? {
+                buyOrders: binanceOrders.buyOrders.map(order => ({ ...order, exchange: 'binance' })),
+                sellOrders: binanceOrders.sellOrders.map(order => ({ ...order, exchange: 'binance' }))
+              }
+            : firstExchange === 'okx'
+            ? {
+                buyOrders: okxOrders.buyOrders.map(order => ({ ...order, exchange: 'okx' })),
+                sellOrders: okxOrders.sellOrders.map(order => ({ ...order, exchange: 'okx' }))
+              }
             : { buyOrders: [], sellOrders: [] };
           
-          const rightOrders = secondExchange === 'binance' ? binanceOrders 
-            : secondExchange === 'okx' ? okxOrders 
+          const rightOrders = secondExchange === 'binance'
+            ? {
+                buyOrders: binanceOrders.buyOrders.map(order => ({ ...order, exchange: 'binance' })),
+                sellOrders: binanceOrders.sellOrders.map(order => ({ ...order, exchange: 'binance' }))
+              }
+            : secondExchange === 'okx'
+            ? {
+                buyOrders: okxOrders.buyOrders.map(order => ({ ...order, exchange: 'okx' })),
+                sellOrders: okxOrders.sellOrders.map(order => ({ ...order, exchange: 'okx' }))
+              }
             : { buyOrders: [], sellOrders: [] };
           
           return {
@@ -150,51 +249,18 @@ export function P2PComparison({ fiat, crypto }: P2PComparisonProps) {
     updatePaymentMethods('right');
   }, [comparison.leftOrderType, comparison.rightOrderType]);
 
-  // Filter orders based on selected order type and payment methods
-  const getFilteredOrders = (orders: { buyOrders: any[]; sellOrders: any[] }, orderType: OrderType, selectedPaymentMethods: string[]) => {
-    let filteredOrders = { ...orders };
-
-    // First filter by order type
-    switch (orderType) {
-      case 'buy':
-        filteredOrders = {
-          buyOrders: orders.buyOrders,
-          sellOrders: []
-        };
-        break;
-      case 'sell':
-        filteredOrders = {
-          buyOrders: [],
-          sellOrders: orders.sellOrders
-        };
-        break;
-    }
-
-    // Then filter by payment methods if not just 'all'
-    if (!selectedPaymentMethods.includes('all')) {
-      filteredOrders = {
-        buyOrders: filteredOrders.buyOrders.filter(order => 
-          order.paymentMethods.some((method: string) => selectedPaymentMethods.includes(method))
-        ),
-        sellOrders: filteredOrders.sellOrders.filter(order => 
-          order.paymentMethods.some((method: string) => selectedPaymentMethods.includes(method))
-        )
-      };
-    }
-
-    return filteredOrders;
-  };
-
   const leftFilteredOrders = getFilteredOrders(
     comparison.leftOrders, 
     comparison.leftOrderType,
-    comparison.leftPaymentMethods
+    comparison.leftPaymentMethods,
+    comparison.selectedExchanges[0]
   );
   
   const rightFilteredOrders = getFilteredOrders(
     comparison.rightOrders, 
     comparison.rightOrderType,
-    comparison.rightPaymentMethods
+    comparison.rightPaymentMethods,
+    comparison.selectedExchanges[1]
   );
 
   const handleLeftOrderTypeChange = (value: string) => {
@@ -205,8 +271,59 @@ export function P2PComparison({ fiat, crypto }: P2PComparisonProps) {
     setComparison(prev => ({ ...prev, rightOrderType: value as OrderType }));
   };
 
+  const handleOrderSelect = (order: Order, orderType: 'buy' | 'sell') => {
+    console.log('Order selected:', { order, orderType });
+    
+    setComparison(prev => {
+      // If selecting a buy order
+      if (orderType === 'buy') {
+        // If already have this buy order selected, deselect it
+        if (prev.selectedBuyOrder?.advNo === order.advNo) {
+          return {
+            ...prev,
+            selectedBuyOrder: null,
+            isSpreadDialogOpen: false
+          };
+        }
+        // Otherwise, select the new buy order
+        return {
+          ...prev,
+          selectedBuyOrder: order,
+          isSpreadDialogOpen: prev.selectedSellOrder !== null
+        };
+      } 
+      // If selecting a sell order
+      else {
+        // If already have this sell order selected, deselect it
+        if (prev.selectedSellOrder?.advNo === order.advNo) {
+          return {
+            ...prev,
+            selectedSellOrder: null,
+            isSpreadDialogOpen: false
+          };
+        }
+        // Otherwise, select the new sell order
+        return {
+          ...prev,
+          selectedSellOrder: order,
+          isSpreadDialogOpen: prev.selectedBuyOrder !== null
+        };
+      }
+    });
+  };
+
+  const handleCloseSpreadDialog = () => {
+    setComparison(prev => ({
+      ...prev,
+      selectedBuyOrder: null,
+      selectedSellOrder: null,
+      isSpreadDialogOpen: false
+    }));
+  };
+
   return (
     <div className="space-y-4">
+      <Toaster richColors position="top-right" />
       <Card>
         <CardHeader>
           <CardTitle>P2P Exchange Comparison</CardTitle>
@@ -293,34 +410,43 @@ export function P2PComparison({ fiat, crypto }: P2PComparisonProps) {
                         <button
                           type="button"
                           onClick={() => {
-                            setComparison(prev => ({ ...prev, leftPaymentMethods: ['all'] }));
+                            setComparison(prev => ({
+                              ...prev,
+                              [index === 0 ? 'leftPaymentMethods' : 'rightPaymentMethods']: ['all']
+                            }));
                           }}
                           className={cn(
                             "px-2 py-0.5 rounded-full text-[11px] border transition-colors",
-                            comparison.leftPaymentMethods.includes('all')
+                            (index === 0 ? comparison.leftPaymentMethods : comparison.rightPaymentMethods).includes('all')
                               ? "bg-primary text-primary-foreground border-primary"
                               : "bg-background hover:bg-muted border-input"
                           )}
                         >
                           All
                         </button>
-                        {leftPaymentMethodOptions.filter(method => method !== 'all').map((method: string) => (
+                        {(index === 0 ? leftPaymentMethodOptions : rightPaymentMethodOptions)
+                          .filter(method => method !== 'all')
+                          .map((method: string) => (
                           <button
                             key={method}
                             type="button"
                             onClick={() => {
                               setComparison(prev => {
-                                const newMethods = prev.leftPaymentMethods.includes('all')
+                                const currentMethods = index === 0 ? prev.leftPaymentMethods : prev.rightPaymentMethods;
+                                const newMethods = currentMethods.includes('all')
                                   ? [method]
-                                  : prev.leftPaymentMethods.includes(method)
-                                    ? prev.leftPaymentMethods.filter(m => m !== method)
-                                    : [...prev.leftPaymentMethods, method];
-                                return { ...prev, leftPaymentMethods: newMethods.length ? newMethods : ['all'] };
+                                  : currentMethods.includes(method)
+                                    ? currentMethods.filter(m => m !== method)
+                                    : [...currentMethods, method];
+                                return {
+                                  ...prev,
+                                  [index === 0 ? 'leftPaymentMethods' : 'rightPaymentMethods']: newMethods.length ? newMethods : ['all']
+                                };
                               });
                             }}
                             className={cn(
                               "px-2 py-0.5 rounded-full text-[11px] border transition-colors",
-                              comparison.leftPaymentMethods.includes(method)
+                              (index === 0 ? comparison.leftPaymentMethods : comparison.rightPaymentMethods).includes(method)
                                 ? "bg-primary text-primary-foreground border-primary"
                                 : "bg-background hover:bg-muted border-input"
                             )}
@@ -342,6 +468,10 @@ export function P2PComparison({ fiat, crypto }: P2PComparisonProps) {
                       exchange={exchange}
                       hasChanges={index === 0 ? comparison.leftOrders.hasChanges : comparison.rightOrders.hasChanges}
                       className="w-full"
+                      onOrderSelect={handleOrderSelect}
+                      selectedBuyOrder={comparison.selectedBuyOrder}
+                      selectedSellOrder={comparison.selectedSellOrder}
+                      side={index === 0 ? 'left' : 'right'}
                     />
                   </div>
                 </div>
@@ -350,6 +480,16 @@ export function P2PComparison({ fiat, crypto }: P2PComparisonProps) {
           </div>
         </CardContent>
       </Card>
+
+      {comparison.selectedBuyOrder && comparison.selectedSellOrder && (
+        <SpreadComparisonDialog
+          isOpen={comparison.isSpreadDialogOpen}
+          onClose={handleCloseSpreadDialog}
+          buyOrder={comparison.selectedBuyOrder}
+          sellOrder={comparison.selectedSellOrder}
+          fiat={fiat}
+        />
+      )}
     </div>
   );
 } 
