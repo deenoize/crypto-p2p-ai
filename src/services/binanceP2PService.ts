@@ -98,9 +98,53 @@ export class BinanceP2PService {
         // Ensure we always have a valid advNo, or create a unique one
         const advNo = item.adv.advNo || `generated-${tradeType}-${index}-${Date.now()}`;
 
+        // Map merchant level based on Binance's API fields
+        const getMerchantLevel = (advertiser: any, adv: any) => {
+          // Block merchants
+          if (adv.classify === 'block' || advertiser.userIdentity === 'BLOCK_MERCHANT') {
+            return 'M_LEVEL_4';  // Block Merchant
+          }
+
+          // Check merchant status
+          if (advertiser.userType === 'merchant' || advertiser.proMerchant === true) {
+            // Check merchant badges
+            if (advertiser.badges && advertiser.badges.length > 0) {
+              const badge = advertiser.badges[0].toLowerCase();
+              if (badge.includes('gold')) {
+                return 'M_LEVEL_3';  // Gold
+              } else if (badge.includes('silver')) {
+                return 'M_LEVEL_2';  // Silver
+              } else if (badge.includes('bronze')) {
+                return 'M_LEVEL_1';  // Bronze
+              }
+            }
+
+            // Check tag icons if badges not present
+            if (advertiser.tagIconUrls && advertiser.tagIconUrls.length > 0) {
+              const iconUrl = advertiser.tagIconUrls[0].toLowerCase();
+              if (iconUrl.includes('gold')) {
+                return 'M_LEVEL_3';  // Gold
+              } else if (iconUrl.includes('silver')) {
+                return 'M_LEVEL_2';  // Silver
+              } else if (iconUrl.includes('bronze')) {
+                return 'M_LEVEL_1';  // Bronze
+              }
+            }
+
+            // If no badges or icons, check userIdentity
+            if (advertiser.userIdentity === 'MASS_MERCHANT') {
+              // Default to Bronze if no specific level is indicated
+              return 'M_LEVEL_1';
+            }
+          }
+
+          // Regular users
+          return '';
+        };
+
         return {
           advNo: advNo,
-          id: advNo, // Add id as alias for easier usage in UI
+          id: advNo,
           price: price,
           amount: amount,
           minAmount: minAmount,
@@ -113,7 +157,7 @@ export class BinanceP2PService {
             completionRate: item.advertiser.monthFinishRate || 0,
             lastOnlineTime: lastOnlineTime || 0,
             userType: item.advertiser.userType || 'user',
-            userIdentity: item.advertiser.userIdentity || ''
+            userIdentity: getMerchantLevel(item.advertiser, item.adv)
           }
         };
       }).filter(Boolean);
