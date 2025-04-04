@@ -441,39 +441,58 @@ const MockDataNotice = ({ visible = false, reason = '' }) => {
   );
 };
 
-export const OrderBook = React.memo(({ 
-  fiat, 
-  crypto, 
-  buyOrders = [], 
+export function OrderBook({
+  fiat,
+  crypto,
+  buyOrders = [],
   sellOrders = [],
   loading = false,
   error = null,
   hasChanges = false,
   spotPrice,
   className,
-  exchange = 'binance',
-  selectedPaymentMethod,
+  exchange,
+  selectedPaymentMethod = 'all',
   onOrderSelect,
   selectedBuyOrder,
   selectedSellOrder,
   side
-}: OrderBookProps) => {
+}: OrderBookProps) {
   const [currentSpotPrice, setCurrentSpotPrice] = useState<number | undefined>(spotPrice);
   const [spotLoading, setSpotLoading] = useState(false);
   const [debugInfo, setDebugInfo] = useState<string | null>(null);
   const [isMockData, setIsMockData] = useState(false);
   const [mockReason, setMockReason] = useState('');
+  const [selectedPaymentMethods, setSelectedPaymentMethods] = useState<string[]>(['all']);
 
-  // Filter orders by payment method
-  const filteredBuyOrders = React.useMemo(() => {
-    if (!selectedPaymentMethod || selectedPaymentMethod === 'all') return buyOrders;
-    return buyOrders.filter(order => order.paymentMethods.includes(selectedPaymentMethod));
-  }, [buyOrders, selectedPaymentMethod]);
+  // Get unique payment methods from all orders
+  const paymentMethodOptions = useMemo(() => {
+    const methods = new Set<string>();
+    methods.add('all');
+    
+    [...buyOrders, ...sellOrders].forEach(order => {
+      if (order.paymentMethods) {
+        order.paymentMethods.forEach(method => methods.add(method));
+      }
+    });
+    
+    return Array.from(methods);
+  }, [buyOrders, sellOrders]);
 
-  const filteredSellOrders = React.useMemo(() => {
-    if (!selectedPaymentMethod || selectedPaymentMethod === 'all') return sellOrders;
-    return sellOrders.filter(order => order.paymentMethods.includes(selectedPaymentMethod));
-  }, [sellOrders, selectedPaymentMethod]);
+  // Filter orders based on selected payment methods
+  const filteredBuyOrders = useMemo(() => {
+    if (selectedPaymentMethods.includes('all')) return buyOrders;
+    return buyOrders.filter(order => 
+      order.paymentMethods.some(method => selectedPaymentMethods.includes(method))
+    );
+  }, [buyOrders, selectedPaymentMethods]);
+
+  const filteredSellOrders = useMemo(() => {
+    if (selectedPaymentMethods.includes('all')) return sellOrders;
+    return sellOrders.filter(order => 
+      order.paymentMethods.some(method => selectedPaymentMethods.includes(method))
+    );
+  }, [sellOrders, selectedPaymentMethods]);
 
   // Check if we're using mock data
   useEffect(() => {
@@ -708,7 +727,7 @@ export const OrderBook = React.memo(({
         <CardHeader className="px-4 pt-4 pb-0">
           <CardTitle className="flex items-center gap-2 text-lg font-medium">
             <LineChart className="h-4 w-4" />
-            {exchange.toUpperCase()} Order Book
+            {exchange ? `${exchange.toUpperCase()} ` : ''}Order Book
             {currentSpotPrice && (
               <Badge variant="outline" className="bg-muted/50 text-xs rounded-sm px-1.5 py-0 h-5">
                 Spot: {formatPrice(currentSpotPrice)}
@@ -786,7 +805,7 @@ export const OrderBook = React.memo(({
         <CardHeader className="px-4 pt-4 pb-0">
           <CardTitle className="flex items-center gap-2 text-lg font-medium">
             <LineChart className="h-4 w-4" />
-            {exchange.toUpperCase()} Order Book
+            {exchange ? `${exchange.toUpperCase()} ` : ''}Order Book
             {currentSpotPrice && (
               <Badge variant="outline" className="bg-muted/50 text-xs rounded-sm px-1.5 py-0 h-5">
                 Spot: {formatPrice(currentSpotPrice)}
@@ -816,7 +835,7 @@ export const OrderBook = React.memo(({
         <CardHeader className="px-4 pt-4 pb-0">
           <CardTitle className="flex items-center gap-2 text-lg font-medium">
             <LineChart className="h-4 w-4" />
-            {exchange.toUpperCase()} Order Book
+            {exchange ? `${exchange.toUpperCase()} ` : ''}Order Book
             {currentSpotPrice && (
               <Badge variant="outline" className="bg-muted/50 text-xs rounded-sm px-1.5 py-0 h-5">
                 Spot: {formatPrice(currentSpotPrice)}
@@ -845,7 +864,7 @@ export const OrderBook = React.memo(({
       <CardHeader className="px-4 pt-4 pb-0">
         <CardTitle className="flex items-center gap-2 text-lg font-medium">
           <LineChart className="h-4 w-4" />
-          {exchange.toUpperCase()} Order Book
+          {exchange ? `${exchange.toUpperCase()} ` : ''}Order Book
           {currentSpotPrice && (
             <Badge variant="outline" className="bg-muted/50 text-xs rounded-sm px-1.5 py-0 h-5">
               Spot: {formatPrice(currentSpotPrice)}
@@ -871,16 +890,57 @@ export const OrderBook = React.memo(({
           </div>
         )}
         
-        <div className={cn(
-          "grid gap-0 bg-muted/30 divide-x divide-border",
-          (filteredBuyOrders.length > 0 && filteredSellOrders.length > 0) ? "grid-cols-2" : "grid-cols-1"
-        )}>
-          {filteredBuyOrders.length > 0 && (
-            <OrderTable 
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => setSelectedPaymentMethods(['all'])}
+              className={cn(
+                "px-2 py-0.5 rounded-full text-[11px] border transition-colors",
+                selectedPaymentMethods.includes('all')
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-background hover:bg-muted border-input"
+              )}
+            >
+              All
+            </button>
+            {paymentMethodOptions.filter(method => method !== 'all').map((method: string) => (
+              <button
+                key={method}
+                type="button"
+                onClick={() => {
+                  setSelectedPaymentMethods(prev => {
+                    const newMethods = prev.includes('all')
+                      ? [method]
+                      : prev.includes(method)
+                        ? prev.filter(m => m !== method)
+                        : [...prev, method];
+                    return newMethods.length ? newMethods : ['all'];
+                  });
+                }}
+                className={cn(
+                  "px-2 py-0.5 rounded-full text-[11px] border transition-colors",
+                  selectedPaymentMethods.includes(method)
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background hover:bg-muted border-input"
+                )}
+              >
+                {method}
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <OrderTable
               orders={filteredBuyOrders}
               type="buy"
               crypto={crypto}
-              {...formattingProps}
+              formatPrice={formatPrice}
+              formatAmount={formatAmount}
+              formatLimit={formatLimit}
+              formatPercent={formatPercent}
+              formatLastOnline={formatLastOnline}
+              getMerchantTypeDisplay={getMerchantTypeDisplay}
+              formatDelta={formatDelta}
               spotPrice={currentSpotPrice}
               onPositionChanged={(order, newPosition) => {
                 // Implement the logic to update the position of the order in the table
@@ -889,13 +949,17 @@ export const OrderBook = React.memo(({
               selectedBuyOrder={selectedBuyOrder}
               selectedSellOrder={selectedSellOrder}
             />
-          )}
-          {filteredSellOrders.length > 0 && (
-            <OrderTable 
+            <OrderTable
               orders={filteredSellOrders}
               type="sell"
               crypto={crypto}
-              {...formattingProps}
+              formatPrice={formatPrice}
+              formatAmount={formatAmount}
+              formatLimit={formatLimit}
+              formatPercent={formatPercent}
+              formatLastOnline={formatLastOnline}
+              getMerchantTypeDisplay={getMerchantTypeDisplay}
+              formatDelta={formatDelta}
               spotPrice={currentSpotPrice}
               onPositionChanged={(order, newPosition) => {
                 // Implement the logic to update the position of the order in the table
@@ -904,9 +968,9 @@ export const OrderBook = React.memo(({
               selectedBuyOrder={selectedBuyOrder}
               selectedSellOrder={selectedSellOrder}
             />
-          )}
+          </div>
         </div>
       </CardContent>
     </Card>
   );
-}); 
+} 
