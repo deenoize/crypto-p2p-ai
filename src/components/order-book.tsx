@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useInView } from 'react-intersection-observer';
+import { P2POrder, OrderType } from '@/types/p2p';
 
 const CURRENCY_SYMBOLS: { [key: string]: string } = {
   'USD': '$',
@@ -50,16 +52,60 @@ const COLOR_PALETTE = [
 const paymentMethodColorCache = new Map<string, string>();
 const merchantTypeColorCache = new Map<string, string>();
 
-// Merchant type color mapping
-type MerchantType = 'Elite Trader' | 'Pro Trader' | 'Experienced' | 'Regular' | 'New Trader';
+type MerchantType = 'M_LEVEL_1' | 'M_LEVEL_2' | 'M_LEVEL_3' | 'M_LEVEL_4';
 
-const MERCHANT_TYPE_COLORS: Record<MerchantType, string> = {
-  'Elite Trader': 'bg-emerald-500/15 text-emerald-700 dark:bg-emerald-400/20 dark:text-emerald-300',
-  'Pro Trader': 'bg-green-500/15 text-green-700 dark:bg-green-400/20 dark:text-green-300',
-  'Experienced': 'bg-blue-500/15 text-blue-700 dark:bg-blue-400/20 dark:text-blue-300',
-  'Regular': 'bg-yellow-500/15 text-yellow-700 dark:bg-yellow-400/20 dark:text-yellow-300',
-  'New Trader': 'bg-red-500/15 text-red-700 dark:bg-red-400/20 dark:text-red-300'
+const MERCHANT_BADGES = {
+  'M_LEVEL_1': {
+    icon: '🥉',
+    color: '#CD7F32',
+    label: 'Bronze Merchant'
+  },
+  'M_LEVEL_2': {
+    icon: '🥈',
+    color: '#C0C0C0',
+    label: 'Silver Merchant'
+  },
+  'M_LEVEL_3': {
+    icon: '🥇',
+    color: '#FFD700',
+    label: 'Gold Merchant'
+  },
+  'M_LEVEL_4': {
+    icon: '🛡️',
+    color: '#FF0000',
+    label: 'Block Merchant'
+  }
+} as const;
+
+// Add user type color mapping
+const USER_TYPE_COLORS: Record<string, string> = {
+  'user': 'bg-blue-500/15 text-blue-700 dark:bg-blue-400/20 dark:text-blue-300',
+  'merchant': 'bg-purple-500/15 text-purple-700 dark:bg-purple-400/20 dark:text-purple-300',
+  'verified': 'bg-green-500/15 text-green-700 dark:bg-green-400/20 dark:text-green-300',
+  'block': 'bg-red-500/15 text-red-700 dark:bg-red-400/20 dark:text-red-300',
+  'all': 'bg-gray-500/15 text-gray-700 dark:bg-gray-400/20 dark:text-gray-300',
+  'common': 'bg-gray-500/15 text-gray-700 dark:bg-gray-400/20 dark:text-gray-300'
 };
+
+// Add function to format user type display
+function formatUserType(userType: string): string {
+  switch (userType) {
+    case 'user':
+      return 'Regular User';
+    case 'merchant':
+      return 'Merchant';
+    case 'verified':
+      return 'Verified';
+    case 'block':
+      return 'Block Merchant';
+    case 'all':
+      return 'All Types';
+    case 'common':
+      return 'Common User';
+    default:
+      return userType;
+  }
+}
 
 function getPaymentMethodColor(method: string): string {
   if (!paymentMethodColorCache.has(method)) {
@@ -70,30 +116,13 @@ function getPaymentMethodColor(method: string): string {
   return paymentMethodColorCache.get(method) || 'bg-neutral-500/15 text-neutral-700 dark:bg-neutral-400/20 dark:text-neutral-300';
 }
 
-interface Order {
-  price: number;
-  amount: number;
-  minAmount: number;
-  maxAmount: number;
-  paymentMethods: string[];
-  advNo: string;
-  id?: string;
-  merchant: {
-    name: string;
-    rating: number;
-    completedTrades: number;
-    completionRate: number;
-    lastOnlineTime: number;
-    userType: string;
-    userIdentity: string;
-  }
-}
+interface Order extends P2POrder {}
 
 interface OrderBookProps {
   fiat: string;
   crypto: string;
-  buyOrders?: Order[];
-  sellOrders?: Order[];
+  buyOrders: P2POrder[];
+  sellOrders: P2POrder[];
   loading?: boolean;
   error?: string | null;
   hasChanges?: boolean;
@@ -101,15 +130,15 @@ interface OrderBookProps {
   className?: string;
   exchange?: string;
   selectedPaymentMethod?: string;
-  onOrderSelect?: (order: Order, type: 'buy' | 'sell') => void;
-  selectedBuyOrder?: Order | null;
-  selectedSellOrder?: Order | null;
-  side?: 'left' | 'right';
+  onOrderSelect?: (order: P2POrder, type: OrderType) => void;
+  selectedOrder?: P2POrder | null;
+  onLoadMore?: () => void;
+  hasMore?: boolean;
 }
 
 interface OrderTableProps {
-  orders: Order[];
-  type: 'buy' | 'sell';
+  orders: P2POrder[];
+  type: OrderType;
   crypto: string;
   formatPrice: (price: number) => string;
   formatAmount: (amount: number) => string;
@@ -119,10 +148,46 @@ interface OrderTableProps {
   getMerchantTypeDisplay: (completedTrades: number, rating: number, completionRate: number) => string;
   formatDelta: (price: number, reference?: number) => string | null;
   spotPrice?: number;
-  onPositionChanged: (order: Order, newPosition: number) => void;
-  onOrderSelect?: (order: Order, type: 'buy' | 'sell') => void;
-  selectedBuyOrder?: Order | null;
-  selectedSellOrder?: Order | null;
+  onPositionChanged: (order: P2POrder, newPosition: number) => void;
+  onOrderSelect?: (order: P2POrder, type: OrderType) => void;
+  selectedBuyOrder?: P2POrder | null;
+  selectedSellOrder?: P2POrder | null;
+}
+
+interface PaymentMethodSelectorProps {
+  paymentMethods: string[];
+  selectedPaymentMethods: string[];
+  onPaymentMethodSelect: (method: string) => void;
+}
+
+function PaymentMethodSelector({ paymentMethods, selectedPaymentMethods, onPaymentMethodSelect }: PaymentMethodSelectorProps) {
+  return (
+    <div className="flex flex-wrap gap-1">
+      <Badge
+        variant="outline"
+        className={cn(
+          "payment-method-badge px-2 py-0.5 cursor-pointer",
+          selectedPaymentMethods.includes('all') ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+        )}
+        onClick={() => onPaymentMethodSelect('all')}
+      >
+        All
+      </Badge>
+      {paymentMethods.filter(method => method !== 'all').map((method) => (
+        <Badge
+          key={method}
+          variant="outline"
+          className={cn(
+            "payment-method-badge px-2 py-0.5 cursor-pointer",
+            selectedPaymentMethods.includes(method) ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+          )}
+          onClick={() => onPaymentMethodSelect(method)}
+        >
+          {method}
+        </Badge>
+      ))}
+    </div>
+  );
 }
 
 // Simplify OrderRow to focus only on rendering the static content
@@ -166,7 +231,7 @@ export const OrderRow = memo(({
   // Log order data for debugging
   useEffect(() => {
     console.log(`Rendering OrderRow for order:`, {
-      id: order.id || order.advNo,
+      advNo: order.advNo,
       price: order.price,
       amount: order.amount,
       type
@@ -195,10 +260,10 @@ export const OrderRow = memo(({
   // Use useMemo for expensive calculations to prevent recalculation on re-render
   const merchantType = React.useMemo(() => {
     return getMerchantTypeDisplay(
-    order.merchant.completedTrades,
-    order.merchant.rating * 100,
-    order.merchant.completionRate * 100
-  ) as MerchantType;
+      order.merchant.completedTrades,
+      order.merchant.rating * 100,
+      order.merchant.completionRate * 100
+    ) as MerchantType;
   }, [order.merchant.completedTrades, order.merchant.rating, order.merchant.completionRate, getMerchantTypeDisplay]);
 
   // Memoize the rendered content to prevent unnecessary re-renders
@@ -269,39 +334,36 @@ export const OrderRow = memo(({
       </TableCell>
   ), [order.paymentMethods]);
 
-  const merchantCell = React.useMemo(() => (
+  const merchantCell = React.useMemo(() => (order: Order) => {
+    const badge = order.merchant.userIdentity ? MERCHANT_BADGES[order.merchant.userIdentity as MerchantType] : null;
+
+    return (
       <TableCell className="py-1 px-2">
         <div className="flex flex-col gap-0.5">
           <div className="flex flex-col sm:flex-row sm:items-center gap-1">
-            <span className="font-medium text-xs truncate max-w-full">{order.merchant.name}</span>
-            <Badge 
-              variant="outline" 
-              className={cn(
-                "px-1.5 py-0 text-[10px] transition-all duration-200 whitespace-nowrap flex-shrink-0",
-                MERCHANT_TYPE_COLORS[merchantType]
+            <div className="flex items-center gap-1">
+              <span className="font-medium text-xs truncate">{order.merchant.name}</span>
+              {badge && (
+                <span 
+                  className="inline-flex items-center justify-center w-4 h-4 text-xs"
+                  title={badge.label}
+                  style={{ color: badge.color }}
+                >
+                  {badge.icon}
+                </span>
               )}
-            >
-              {merchantType}
-            </Badge>
-          <span className="text-[10px] text-muted-foreground">{formatLastOnline(order.merchant.lastOnlineTime)}</span>
+            </div>
+            <span className="text-[10px] text-muted-foreground">{formatLastOnline(order.merchant.lastOnlineTime)}</span>
           </div>
           <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-          <span>{order.merchant.completedTrades} orders</span>
+            <span>{order.merchant.completedTrades} orders</span>
             <span>{formatPercent(order.merchant.rating * 100)}% pos</span>
             <span>{formatPercent(order.merchant.completionRate * 100)}% comp</span>
           </div>
         </div>
       </TableCell>
-  ), [
-    order.merchant.name, 
-    order.merchant.rating, 
-    order.merchant.completionRate,
-    order.merchant.completedTrades,
-    order.merchant.lastOnlineTime,
-    merchantType,
-    formatPercent,
-    formatLastOnline
-  ]);
+    );
+  }, [formatLastOnline, formatPercent]);
 
   return (
     <TableRow 
@@ -313,7 +375,7 @@ export const OrderRow = memo(({
       )}
       onClick={() => {
         console.log('Order clicked:', {
-          id: order.id || order.advNo,
+          advNo: order.advNo,
           type,
           isSelected
         });
@@ -324,7 +386,7 @@ export const OrderRow = memo(({
       {priceCell}
       {amountCell}
       {paymentCell}
-      {merchantCell}
+      {merchantCell(order)}
     </TableRow>
   );
 }, (prevProps, nextProps) => {
@@ -334,6 +396,8 @@ export const OrderRow = memo(({
     prevProps.spotPrice === nextProps.spotPrice
   );
 });
+
+const getOrderKey = (order: P2POrder) => order.advNo;
 
 // Create a completely stable OrderTable that doesn't re-render existing orders
 export function OrderTable({
@@ -381,6 +445,11 @@ export function OrderTable({
     );
   }
 
+  const ordersStateMemo = React.useMemo(() => ordersState.map((order) => ({
+    ...order,
+    key: getOrderKey(order)
+  })), [ordersState]);
+
   return (
     <div className="relative">
       <Table>
@@ -393,9 +462,9 @@ export function OrderTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {ordersState.map((order, index) => (
+          {ordersStateMemo.map((order, index) => (
             <OrderRow
-              key={order.advNo}
+              key={`${order.key}-${index}`}
               order={order}
               type={type}
               crypto={crypto}
@@ -444,8 +513,8 @@ const MockDataNotice = ({ visible = false, reason = '' }) => {
 export function OrderBook({
   fiat,
   crypto,
-  buyOrders = [],
-  sellOrders = [],
+  buyOrders,
+  sellOrders,
   loading = false,
   error = null,
   hasChanges = false,
@@ -454,9 +523,9 @@ export function OrderBook({
   exchange,
   selectedPaymentMethod = 'all',
   onOrderSelect,
-  selectedBuyOrder,
-  selectedSellOrder,
-  side
+  selectedOrder,
+  onLoadMore,
+  hasMore
 }: OrderBookProps) {
   const [currentSpotPrice, setCurrentSpotPrice] = useState<number | undefined>(spotPrice);
   const [spotLoading, setSpotLoading] = useState(false);
@@ -464,6 +533,7 @@ export function OrderBook({
   const [isMockData, setIsMockData] = useState(false);
   const [mockReason, setMockReason] = useState('');
   const [selectedPaymentMethods, setSelectedPaymentMethods] = useState<string[]>(['all']);
+  const { ref: loadMoreRef, inView } = useInView();
 
   // Get unique payment methods from all orders
   const paymentMethodOptions = useMemo(() => {
@@ -528,9 +598,9 @@ export function OrderBook({
         console.log('First buy order:', firstBuyOrder);
         
         // Check data validity
-        if (!firstBuyOrder.id && !firstBuyOrder.advNo) {
-          console.error('Invalid buy order: Missing ID/advNo', firstBuyOrder);
-          setDebugInfo('Error: Buy orders have invalid structure - missing ID fields');
+        if (!firstBuyOrder.advNo) {
+          console.error('Invalid buy order: Missing advNo', firstBuyOrder);
+          setDebugInfo('Error: Buy orders have invalid structure - missing advNo field');
         }
       }
       
@@ -539,9 +609,9 @@ export function OrderBook({
         console.log('First sell order:', firstSellOrder);
         
         // Check data validity
-        if (!firstSellOrder.id && !firstSellOrder.advNo) {
-          console.error('Invalid sell order: Missing ID/advNo', firstSellOrder);
-          setDebugInfo('Error: Sell orders have invalid structure - missing ID fields');
+        if (!firstSellOrder.advNo) {
+          console.error('Invalid sell order: Missing advNo', firstSellOrder);
+          setDebugInfo('Error: Sell orders have invalid structure - missing advNo field');
         }
       }
       
@@ -650,19 +720,16 @@ export function OrderBook({
     fetchSpotPrice();
   }, [crypto, fiat, spotPrice, buyOrders, sellOrders]);
 
-  // Improved memoization strategy for orders that considers only ID changes
-  // This prevents unnecessary rerenders when the content changes but the IDs remain the same
-  const buyOrdersMemo = React.useMemo(() => buyOrders, [
-    // Only rerender if the IDs change, not the content
-    buyOrders.length,
-    // Join IDs to create a stable dependency
-    buyOrders.map(o => o.advNo).join(',')
-  ]);
-  
-  const sellOrdersMemo = React.useMemo(() => sellOrders, [
-    sellOrders.length,
-    sellOrders.map(o => o.advNo).join(',')
-  ]);
+  // Improved memoization strategy for orders that considers only advNo changes
+  const buyOrdersWithKeys = React.useMemo(() => buyOrders.map((order) => ({
+    ...order,
+    key: order.advNo
+  })), [buyOrders]);
+
+  const sellOrdersWithKeys = React.useMemo(() => sellOrders.map((order) => ({
+    ...order,
+    key: order.advNo
+  })), [sellOrders]);
   
   const formatAmount = (amount: number) => amount.toLocaleString();
   const formatPrice = (price: number) => {
@@ -721,6 +788,12 @@ export function OrderBook({
   // Additional error state for empty orders
   const hasEmptyOrders = (!loading && !error && buyOrders.length === 0 && sellOrders.length === 0);
 
+  useEffect(() => {
+    if (inView && hasMore && !spotLoading) {
+      onLoadMore?.();
+    }
+  }, [inView, hasMore, spotLoading, onLoadMore]);
+
   if (loading) {
     return (
       <Card className={cn("col-span-1", className)}>
@@ -760,11 +833,11 @@ export function OrderBook({
           ) : (
             <div className={cn(
               "grid gap-0 bg-muted/30 divide-x divide-border",
-              (buyOrdersMemo.length > 0 && sellOrdersMemo.length > 0) ? "grid-cols-2" : "grid-cols-1"
+              (buyOrdersWithKeys.length > 0 && sellOrdersWithKeys.length > 0) ? "grid-cols-2" : "grid-cols-1"
             )}>
-              {buyOrdersMemo.length > 0 && (
+              {buyOrdersWithKeys.length > 0 && (
                 <OrderTable 
-                  orders={buyOrdersMemo}
+                  orders={buyOrdersWithKeys}
                   type="buy"
                   crypto={crypto}
                   {...formattingProps}
@@ -773,13 +846,13 @@ export function OrderBook({
                     // Implement the logic to update the position of the order in the table
                   }}
                   onOrderSelect={onOrderSelect}
-                  selectedBuyOrder={selectedBuyOrder}
-                  selectedSellOrder={selectedSellOrder}
+                  selectedBuyOrder={selectedOrder}
+                  selectedSellOrder={selectedOrder}
                 />
               )}
-              {sellOrdersMemo.length > 0 && (
+              {sellOrdersWithKeys.length > 0 && (
                 <OrderTable 
-                  orders={sellOrdersMemo}
+                  orders={sellOrdersWithKeys}
                   type="sell"
                   crypto={crypto}
                   {...formattingProps}
@@ -788,8 +861,8 @@ export function OrderBook({
                     // Implement the logic to update the position of the order in the table
                   }}
                   onOrderSelect={onOrderSelect}
-                  selectedBuyOrder={selectedBuyOrder}
-                  selectedSellOrder={selectedSellOrder}
+                  selectedBuyOrder={selectedOrder}
+                  selectedSellOrder={selectedOrder}
                 />
               )}
             </div>
@@ -930,44 +1003,167 @@ export function OrderBook({
             ))}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <OrderTable
-              orders={filteredBuyOrders}
-              type="buy"
-              crypto={crypto}
-              formatPrice={formatPrice}
-              formatAmount={formatAmount}
-              formatLimit={formatLimit}
-              formatPercent={formatPercent}
-              formatLastOnline={formatLastOnline}
-              getMerchantTypeDisplay={getMerchantTypeDisplay}
-              formatDelta={formatDelta}
-              spotPrice={currentSpotPrice}
-              onPositionChanged={(order, newPosition) => {
-                // Implement the logic to update the position of the order in the table
-              }}
-              onOrderSelect={onOrderSelect}
-              selectedBuyOrder={selectedBuyOrder}
-              selectedSellOrder={selectedSellOrder}
-            />
-            <OrderTable
-              orders={filteredSellOrders}
-              type="sell"
-              crypto={crypto}
-              formatPrice={formatPrice}
-              formatAmount={formatAmount}
-              formatLimit={formatLimit}
-              formatPercent={formatPercent}
-              formatLastOnline={formatLastOnline}
-              getMerchantTypeDisplay={getMerchantTypeDisplay}
-              formatDelta={formatDelta}
-              spotPrice={currentSpotPrice}
-              onPositionChanged={(order, newPosition) => {
-                // Implement the logic to update the position of the order in the table
-              }}
-              onOrderSelect={onOrderSelect}
-              selectedBuyOrder={selectedBuyOrder}
-              selectedSellOrder={selectedSellOrder}
-            />
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Buy Orders</CardTitle>
+                <PaymentMethodSelector
+                  paymentMethods={paymentMethodOptions}
+                  selectedPaymentMethods={selectedPaymentMethods}
+                  onPaymentMethodSelect={(method) => {
+                    setSelectedPaymentMethods(prev => {
+                      if (prev.includes('all')) {
+                        return ['all'];
+                      } else if (prev.includes(method)) {
+                        return prev.filter(m => m !== method);
+                      } else {
+                        return [...prev, method];
+                      }
+                    });
+                  }}
+                />
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableBody>
+                    {filteredBuyOrders.map((order, index) => (
+                      <TableRow
+                        key={`${getOrderKey(order)}-${index}`}
+                        className={cn(
+                          "cursor-pointer hover:bg-muted/50",
+                          selectedOrder?.advNo === order.advNo && "bg-muted"
+                        )}
+                        onClick={() => onOrderSelect?.(order, 'buy')}
+                      >
+                        <TableCell className="w-[100px]">
+                          {order.price.toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          {order.amount.toLocaleString()} {crypto}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1 max-w-full">
+                            {order.paymentMethods.map((method, i) => (
+                              <Badge 
+                                key={`${order.advNo}-${i}`}
+                                variant="outline" 
+                                className={cn(
+                                  "payment-method-badge px-2 py-0.5 my-0.5 text-[10px] transition-all duration-200 hover:bg-muted inline-block",
+                                  getPaymentMethodColor(method)
+                                )}
+                              >
+                                {method}
+                              </Badge>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1">
+                              <span className="font-medium text-xs truncate">{order.merchant.name}</span>
+                            </div>
+                            <span className="text-[10px] text-muted-foreground">{formatLastOnline(order.merchant.lastOnlineTime)}</span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {hasMore && (
+                      <TableRow ref={loadMoreRef}>
+                        <TableCell colSpan={5} className="text-center py-4">
+                          {spotLoading ? (
+                            <div className="flex items-center justify-center">
+                              <Loader2 className="h-6 w-6 animate-spin" />
+                            </div>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">Loading more orders...</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Sell Orders</CardTitle>
+                <PaymentMethodSelector
+                  paymentMethods={paymentMethodOptions}
+                  selectedPaymentMethods={selectedPaymentMethods}
+                  onPaymentMethodSelect={(method) => {
+                    setSelectedPaymentMethods(prev => {
+                      if (prev.includes('all')) {
+                        return ['all'];
+                      } else if (prev.includes(method)) {
+                        return prev.filter(m => m !== method);
+                      } else {
+                        return [...prev, method];
+                      }
+                    });
+                  }}
+                />
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableBody>
+                    {filteredSellOrders.map((order, index) => (
+                      <TableRow
+                        key={`${getOrderKey(order)}-${index}`}
+                        className={cn(
+                          "cursor-pointer hover:bg-muted/50",
+                          selectedOrder?.advNo === order.advNo && "bg-muted"
+                        )}
+                        onClick={() => onOrderSelect?.(order, 'sell')}
+                      >
+                        <TableCell className="w-[100px]">
+                          {order.price.toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          {order.amount.toLocaleString()} {crypto}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1 max-w-full">
+                            {order.paymentMethods.map((method, i) => (
+                              <Badge 
+                                key={`${order.advNo}-${i}`}
+                                variant="outline" 
+                                className={cn(
+                                  "payment-method-badge px-2 py-0.5 my-0.5 text-[10px] transition-all duration-200 hover:bg-muted inline-block",
+                                  getPaymentMethodColor(method)
+                                )}
+                              >
+                                {method}
+                              </Badge>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1">
+                              <span className="font-medium text-xs truncate">{order.merchant.name}</span>
+                            </div>
+                            <span className="text-[10px] text-muted-foreground">{formatLastOnline(order.merchant.lastOnlineTime)}</span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {hasMore && (
+                      <TableRow ref={loadMoreRef}>
+                        <TableCell colSpan={5} className="text-center py-4">
+                          {spotLoading ? (
+                            <div className="flex items-center justify-center">
+                              <Loader2 className="h-6 w-6 animate-spin" />
+                            </div>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">Loading more orders...</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </CardContent>
