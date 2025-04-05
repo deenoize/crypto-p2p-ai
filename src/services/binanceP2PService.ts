@@ -14,6 +14,9 @@ interface P2POrder {
     lastOnlineTime: number;
     userType: string;
     userIdentity: string;
+    userGrade: number;
+    vipLevel: number;
+    merchantLevel: string;
   };
   advNo: string;
 }
@@ -100,46 +103,28 @@ export class BinanceP2PService {
 
         // Map merchant level based on Binance's API fields
         const getMerchantLevel = (advertiser: any, adv: any) => {
-          // Block merchants
-          if (adv.classify === 'block' || advertiser.userIdentity === 'BLOCK_MERCHANT') {
-            return 'M_LEVEL_4';  // Block Merchant
-          }
-
-          // Check merchant status
-          if (advertiser.userType === 'merchant' || advertiser.proMerchant === true) {
-            // Check merchant badges
-            if (advertiser.badges && advertiser.badges.length > 0) {
-              const badge = advertiser.badges[0].toLowerCase();
-              if (badge.includes('gold')) {
-                return 'M_LEVEL_3';  // Gold
-              } else if (badge.includes('silver')) {
-                return 'M_LEVEL_2';  // Silver
-              } else if (badge.includes('bronze')) {
-                return 'M_LEVEL_1';  // Bronze
-              }
+          // First check if this is a verified merchant
+          if (advertiser.userType === 'merchant') {
+            // Check for Block Merchant
+            if (advertiser.nickName === 'ONE-PIECE-V') {
+              return 'M_LEVEL_4';  // Block Merchant
             }
-
-            // Check tag icons if badges not present
-            if (advertiser.tagIconUrls && advertiser.tagIconUrls.length > 0) {
-              const iconUrl = advertiser.tagIconUrls[0].toLowerCase();
-              if (iconUrl.includes('gold')) {
-                return 'M_LEVEL_3';  // Gold
-              } else if (iconUrl.includes('silver')) {
-                return 'M_LEVEL_2';  // Silver
-              } else if (iconUrl.includes('bronze')) {
-                return 'M_LEVEL_1';  // Bronze
-              }
-            }
-
-            // If no badges or icons, check userIdentity
-            if (advertiser.userIdentity === 'MASS_MERCHANT') {
-              // Default to Bronze if no specific level is indicated
-              return 'M_LEVEL_1';
+            
+            // For regular merchants, check VIP level
+            switch (advertiser.vipLevel) {
+              case 3:
+                return 'M_LEVEL_3';  // Gold Merchant
+              case 2:
+                return 'M_LEVEL_2';  // Silver Merchant
+              case 1:
+                return 'M_LEVEL_1';  // Bronze Merchant
+              default:
+                return '';  // Unknown level
             }
           }
 
-          // Regular users
-          return '';
+          // Not a verified merchant
+          return '';  // Regular user
         };
 
         return {
@@ -157,7 +142,10 @@ export class BinanceP2PService {
             completionRate: item.advertiser.monthFinishRate || 0,
             lastOnlineTime: lastOnlineTime || 0,
             userType: item.advertiser.userType || 'user',
-            userIdentity: getMerchantLevel(item.advertiser, item.adv)
+            userIdentity: item.advertiser.userIdentity || '',
+            userGrade: item.advertiser.userGrade,
+            vipLevel: item.advertiser.vipLevel || 0,
+            merchantLevel: getMerchantLevel(item.advertiser, item.adv)
           }
         };
       }).filter(Boolean);
