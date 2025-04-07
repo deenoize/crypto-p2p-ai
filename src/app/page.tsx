@@ -115,10 +115,10 @@ export default function DashboardPage() {
           />
           <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
             <Tabs defaultValue="overview" className="space-y-4">
-              <TabsList>
-                <TabsTrigger value="overview">Overview</TabsTrigger>
-                <TabsTrigger value="order-book">Order Book</TabsTrigger>
-                <TabsTrigger value="p2p-comparison">P2P Comparison</TabsTrigger>
+              <TabsList className="bg-palette-macadamiaBeige dark:bg-palette-norfolkGreen">
+                <TabsTrigger value="overview" className="data-[state=active]:bg-palette-fenceGreen data-[state=active]:text-palette-venetianLace">Overview</TabsTrigger>
+                <TabsTrigger value="order-book" className="data-[state=active]:bg-palette-fenceGreen data-[state=active]:text-palette-venetianLace">Order Book</TabsTrigger>
+                <TabsTrigger value="p2p-comparison" className="data-[state=active]:bg-palette-fenceGreen data-[state=active]:text-palette-venetianLace">P2P Comparison</TabsTrigger>
               </TabsList>
               <TabsContent value="overview" className="space-y-4">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -147,8 +147,8 @@ export default function DashboardPage() {
                             className={cn(
                               "px-2 py-0.5 rounded-full text-[11px] border transition-colors",
                               selectedPaymentMethods.includes('all')
-                                ? "bg-primary text-primary-foreground border-primary"
-                                : "bg-background hover:bg-muted border-input"
+                                ? "bg-palette-fieryGlow text-palette-venetianLace border-palette-fieryGlow"
+                                : "bg-background hover:bg-palette-pumpkinVapor hover:text-palette-fenceGreen border-input"
                             )}
                           >
                             All
@@ -172,8 +172,8 @@ export default function DashboardPage() {
                                 className={cn(
                                   "px-2 py-0.5 rounded-full text-[11px] border transition-colors",
                                   selectedPaymentMethods.includes(method)
-                                    ? "bg-primary text-primary-foreground border-primary"
-                                    : "bg-background hover:bg-muted border-input"
+                                    ? "bg-palette-fieryGlow text-palette-venetianLace border-palette-fieryGlow"
+                                    : "bg-background hover:bg-palette-pumpkinVapor hover:text-palette-fenceGreen border-input"
                                 )}
                               >
                                 {method}

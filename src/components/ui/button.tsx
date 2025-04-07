@@ -17,6 +17,10 @@ const buttonVariants = cva(
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
+        fiery: "bg-[#F0531C] text-[#F7EDDA] hover:bg-[#F0531C]/90",
+        fenceGreen: "bg-[#09332C] text-[#F7EDDA] hover:bg-[#09332C]/90",
+        pumpkin: "bg-[#FFA74F] text-[#09332C] hover:bg-[#FFA74F]/90",
+        norfolk: "bg-[#2E4B3C] text-[#F7EDDA] hover:bg-[#2E4B3C]/90",
       },
       size: {
         default: "h-10 px-4 py-2",

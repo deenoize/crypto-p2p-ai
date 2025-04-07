@@ -4,65 +4,79 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
+    /* Venetian Lace - Light Beige */
+    --background: 48 33% 93%;
+    --foreground: 156 18% 23%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    /* Macadamia Beige - Lighter Beige */
+    --card: 38 42% 88%;
+    --card-foreground: 156 18% 23%;
  
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
+    /* Norfolk Green - Dark Green */
+    --popover: 38 42% 88%;
+    --popover-foreground: 156 18% 23%;
  
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 0 0% 98%;
+    /* Fence Green - Medium Green */
+    --primary: 156 18% 23%;
+    --primary-foreground: 48 33% 93%;
  
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
+    /* Fiery Glow - Orange */
+    --secondary: 17 98% 52%;
+    --secondary-foreground: 48 33% 93%;
  
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
+    /* Pumpkin Vapor - Light Orange */
+    --muted: 33 79% 75%;
+    --muted-foreground: 156 18% 23%;
  
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
+    /* Venetian Lace with Fence Green */
+    --accent: 156 18% 23%;
+    --accent-foreground: 48 33% 93%;
  
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive-foreground: 48 33% 93%;
 
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 5.9% 10%;
+    --border: 38 42% 80%;
+    --input: 38 42% 80%;
+    --ring: 156 18% 23%;
  
     --radius: 0.5rem;
   }
  
   .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
+    /* Fence Green - Medium Green */
+    --background: 156 18% 23%;
+    --foreground: 48 33% 93%;
  
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
+    /* Norfolk Green - Dark Green */
+    --card: 146 33% 28%;
+    --card-foreground: 48 33% 93%;
  
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
+    /* Fence Green - Medium Green */
+    --popover: 156 18% 23%;
+    --popover-foreground: 48 33% 93%;
  
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
+    /* Venetian Lace - Light Beige */
+    --primary: 48 33% 93%;
+    --primary-foreground: 156 18% 23%;
  
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
+    /* Fiery Glow - Orange */
+    --secondary: 17 98% 52%;
+    --secondary-foreground: 48 33% 93%;
  
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
+    /* Pumpkin Vapor - Light Orange */
+    --muted: 33 79% 75%;
+    --muted-foreground: 156 18% 23%;
  
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
+    /* Norfolk Green with Venetian Lace */
+    --accent: 146 33% 28%;
+    --accent-foreground: 48 33% 93%;
  
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 48 33% 93%;
  
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
+    --border: 146 33% 28%;
+    --input: 146 33% 28%;
+    --ring: 48 33% 93%;
   }
 }
  
