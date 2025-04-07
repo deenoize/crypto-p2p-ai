@@ -386,8 +386,14 @@ export function P2PComparison({ fiat, crypto }: P2PComparisonProps) {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              {comparison.selectedExchanges.slice(0, 2).map((exchange, index) => (
+            <div className={cn(
+              "grid gap-4",
+              comparison.selectedExchanges.length === 1 ? "grid-cols-1" :
+              comparison.selectedExchanges.length === 2 ? "grid-cols-1 md:grid-cols-2" :
+              comparison.selectedExchanges.length === 3 ? "grid-cols-1 md:grid-cols-3" :
+              "grid-cols-1 md:grid-cols-4"
+            )}>
+              {comparison.selectedExchanges.slice(0, 4).map((exchange, index) => (
                 <div key={exchange} className="w-full">
                   <h3 className="text-lg font-semibold mb-2">{exchange.toUpperCase()}</h3>
                   <div className="space-y-4">
@@ -472,6 +478,7 @@ export function P2PComparison({ fiat, crypto }: P2PComparisonProps) {
                       selectedBuyOrder={comparison.selectedBuyOrder}
                       selectedSellOrder={comparison.selectedSellOrder}
                       side={index === 0 ? 'left' : 'right'}
+                      orderType={index === 0 ? comparison.leftOrderType : comparison.rightOrderType}
                     />
                   </div>
                 </div>

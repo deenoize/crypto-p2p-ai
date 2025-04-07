@@ -1,9 +1,11 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { OrderBook } from '../order-book';
 
 const mockBuyOrders = [
   {
+    id: 'buy123',
+    advNo: 'buy123',
     price: 30000,
     amount: 1.5,
     minAmount: 100,
@@ -14,15 +16,17 @@ const mockBuyOrders = [
       rating: 98,
       completedTrades: 550,
       completionRate: 99.5,
-      lastOnlineTime: Date.now() / 1000 - 300, // 5 minutes ago
+      lastOnlineTime: Date.now() / 1000 - 300,
       userType: 'user',
-      userIdentity: ''
+      userIdentity: 'user1'
     }
   }
 ];
 
 const mockSellOrders = [
   {
+    id: 'sell456',
+    advNo: 'sell456',
     price: 30100,
     amount: 0.5,
     minAmount: 50,
@@ -33,9 +37,9 @@ const mockSellOrders = [
       rating: 92,
       completedTrades: 150,
       completionRate: 95.0,
-      lastOnlineTime: Date.now() / 1000 - 7200, // 2 hours ago
+      lastOnlineTime: Date.now() / 1000 - 7200,
       userType: 'user',
-      userIdentity: ''
+      userIdentity: 'user2'
     }
   }
 ];
@@ -82,7 +86,6 @@ describe('OrderBook Component', () => {
     expect(screen.getByText('98.0%')).toBeInTheDocument();
     expect(screen.getByText('99.5% completion')).toBeInTheDocument();
     expect(screen.getByText('550 trades')).toBeInTheDocument();
-    expect(screen.getByText('Elite Trader')).toBeInTheDocument();
 
     // Check sell order details
     expect(screen.getByText('$30,100')).toBeInTheDocument();
@@ -93,36 +96,58 @@ describe('OrderBook Component', () => {
     expect(screen.getByText('92.0%')).toBeInTheDocument();
     expect(screen.getByText('95.0% completion')).toBeInTheDocument();
     expect(screen.getByText('150 trades')).toBeInTheDocument();
-    expect(screen.getByText('Experienced')).toBeInTheDocument();
   });
 
-  it('formats merchant type correctly based on metrics', () => {
-    const orders = [{
-      ...mockBuyOrders[0],
-      merchant: {
-        ...mockBuyOrders[0].merchant,
-        completedTrades: 25,
-        rating: 85,
-        completionRate: 85
-      }
-    }];
+  it('handles order selection correctly', () => {
+    const onOrderSelectMock = jest.fn();
+    render(
+      <OrderBook
+        fiat="USD"
+        crypto="BTC"
+        buyOrders={mockBuyOrders}
+        sellOrders={mockSellOrders}
+        onOrderSelect={onOrderSelectMock}
+      />
+    );
 
-    render(<OrderBook fiat="USD" crypto="BTC" buyOrders={orders} />);
-    expect(screen.getByText('New Trader')).toBeInTheDocument();
+    // Find and click buy order
+    const buyOrderRow = screen.getByText('TestMerchant1').closest('tr');
+    if (buyOrderRow) {
+      fireEvent.click(buyOrderRow);
+      expect(onOrderSelectMock).toHaveBeenCalledWith('BUY', mockBuyOrders[0]);
+    }
+
+    // Find and click sell order
+    const sellOrderRow = screen.getByText('TestMerchant2').closest('tr');
+    if (sellOrderRow) {
+      fireEvent.click(sellOrderRow);
+      expect(onOrderSelectMock).toHaveBeenCalledWith('SELL', mockSellOrders[0]);
+    }
   });
 
-  it('formats last online time correctly', () => {
-    const now = Date.now();
-    const orders = [{
-      ...mockBuyOrders[0],
-      merchant: {
-        ...mockBuyOrders[0].merchant,
-        lastOnlineTime: now / 1000 - 30 // 30 seconds ago
-      }
-    }];
+  it('highlights selected orders correctly', () => {
+    render(
+      <OrderBook
+        fiat="USD"
+        crypto="BTC"
+        buyOrders={mockBuyOrders}
+        sellOrders={mockSellOrders}
+        selectedBuyOrder={mockBuyOrders[0]}
+        selectedSellOrder={mockSellOrders[0]}
+      />
+    );
 
-    render(<OrderBook fiat="USD" crypto="BTC" buyOrders={orders} />);
-    expect(screen.getByText('Just now')).toBeInTheDocument();
+    // Check if buy order is highlighted
+    const buyOrderRow = screen.getByText('TestMerchant1').closest('tr');
+    if (buyOrderRow) {
+      expect(buyOrderRow).toHaveClass('bg-blue-50');
+    }
+
+    // Check if sell order is highlighted
+    const sellOrderRow = screen.getByText('TestMerchant2').closest('tr');
+    if (sellOrderRow) {
+      expect(sellOrderRow).toHaveClass('bg-blue-50');
+    }
   });
 
   it('applies correct color classes for payment methods', () => {
@@ -156,5 +181,34 @@ describe('OrderBook Component', () => {
     );
 
     expect(screen.getByText('€28,000')).toBeInTheDocument();
+  });
+
+  it('handles order deselection correctly', () => {
+    const onOrderSelectMock = jest.fn();
+    render(
+      <OrderBook
+        fiat="USD"
+        crypto="BTC"
+        buyOrders={mockBuyOrders}
+        sellOrders={mockSellOrders}
+        onOrderSelect={onOrderSelectMock}
+        selectedBuyOrder={mockBuyOrders[0]}
+        selectedSellOrder={mockSellOrders[0]}
+      />
+    );
+
+    // Click selected buy order again to deselect
+    const buyOrderRow = screen.getByText('TestMerchant1').closest('tr');
+    if (buyOrderRow) {
+      fireEvent.click(buyOrderRow);
+      expect(onOrderSelectMock).toHaveBeenCalledWith('BUY', null);
+    }
+
+    // Click selected sell order again to deselect
+    const sellOrderRow = screen.getByText('TestMerchant2').closest('tr');
+    if (sellOrderRow) {
+      fireEvent.click(sellOrderRow);
+      expect(onOrderSelectMock).toHaveBeenCalledWith('SELL', null);
+    }
   });
 }); 

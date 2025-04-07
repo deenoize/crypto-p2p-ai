@@ -19,85 +19,77 @@ const binanceApi = axios.create({
   }
 });
 
-export async function GET(req: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    // Extract query parameters
-    const url = new URL(req.url);
-    const fiat = url.searchParams.get('fiat');
-    const crypto = url.searchParams.get('crypto');
-    const tradeType = url.searchParams.get('tradeType');
-    const debug = url.searchParams.get('debug') === 'true';
+    const { searchParams } = new URL(request.url);
+    const fiat = searchParams.get('fiat');
+    const crypto = searchParams.get('crypto');
+    const tradeType = searchParams.get('tradeType');
 
     if (!fiat || !crypto || !tradeType) {
       return NextResponse.json(
-        { error: 'Missing required parameters: fiat, crypto, or tradeType' },
+        { error: 'Missing required parameters' },
         { status: 400 }
       );
     }
 
-    console.log('Processing Binance P2P request:', { fiat, crypto, tradeType, debug });
-
-    const response = await binanceApi.post('/bapi/c2c/v2/friendly/c2c/adv/search', {
+    const response = await fetch('https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Cache-Control': 'no-cache',
+        'Origin': 'https://p2p.binance.com',
+        'Pragma': 'no-cache',
+        'Referer': 'https://p2p.binance.com/',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'clienttype': 'web'
+      },
+      body: JSON.stringify({
+        asset: crypto,
       fiat,
-      asset: crypto,
-      tradeType,
       page: 1,
       rows: 20,
+        tradeType,
       transAmount: "",
+        payTypes: [],
       countries: [],
       proMerchantAds: false,
       publisherType: null,
-      payTypes: [],
-      classifies: ["mass", "mass-v2"]
+        classify: "mass"
+      }),
     });
 
-    if (debug) {
-      // Log the complete raw response for debugging
-      console.log('Raw Binance API Response:', {
-        success: response.data.success,
-        total: response.data.total,
-        firstAdvertiser: response.data.data?.[0]?.advertiser ? {
-          ...response.data.data[0].advertiser,
-          // Explicitly log all time-related fields
-          onlineStatus: response.data.data[0].advertiser.onlineStatus,
-          lastOnlineTime: response.data.data[0].advertiser.lastOnlineTime,
-          lastActiveTime: response.data.data[0].advertiser.lastActiveTime,
-          lastLoginTime: response.data.data[0].advertiser.lastLoginTime,
-        } : null
+    if (!response.ok) {
+      console.error('Binance API error:', {
+        status: response.status,
+        statusText: response.statusText
       });
+      throw new Error(`Binance API error: ${response.status}`);
     }
 
-    if (!response.data || !response.data.data) {
-      console.error('Invalid Binance API response structure:', response.data);
-      return NextResponse.json(
-        { error: 'Invalid response from Binance API' },
-        { status: 500 }
-      );
+    const data = await response.json();
+    console.log('Binance API response:', {
+      success: data.success,
+      code: data.code,
+      message: data.message,
+      dataLength: data.data?.length,
+      firstItem: data.data?.[0]
+    });
+
+    if (!data.success) {
+      console.error('Binance API error response:', data);
+      throw new Error(data.message || 'Failed to fetch data from Binance');
     }
 
-    console.log('Successfully fetched Binance P2P data:', {
-      ordersCount: response.data.data.length,
-      fiat,
-      crypto,
-      tradeType
-    });
-
-    return NextResponse.json(response.data);
-
-  } catch (error: any) {
-    console.error('Binance P2P API error:', {
-      message: error.message,
-      response: error.response?.data,
-      status: error.response?.status,
-      stack: error.stack
-    });
-
-    const statusCode = error.response?.status || 500;
-    const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch Binance P2P data';
-
+    // Return the data in the expected structure
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error('Error fetching from Binance:', error);
     return NextResponse.json(
-      { error: errorMessage },
-      { status: statusCode }
+      { error: 'Failed to fetch data from Binance' },
+      { status: 500 }
     );
   }
 } 

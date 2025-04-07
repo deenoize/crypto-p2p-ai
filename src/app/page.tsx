@@ -16,6 +16,8 @@ import { P2PComparison } from "@/components/p2p-comparison";
 import { binanceP2PService } from "@/services/binanceP2PService";
 import { okxP2PService } from "@/services/okxP2PService";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 
 const POLLING_INTERVAL = 5000; // Poll every 5 seconds
 
@@ -29,44 +31,68 @@ export default function DashboardPage() {
     hasChanges?: boolean;
   }>({
     buyOrders: [],
-    sellOrders: [],
+    sellOrders: []
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedPaymentMethods, setSelectedPaymentMethods] = useState<string[]>(['all']);
 
-  const fetchOrders = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      console.log(`Fetching orders from ${exchange}...`);
-      
-      // Select the appropriate service based on exchange
-      const p2pService = exchange === 'okx' ? okxP2PService : binanceP2PService;
-      
-      const data = await p2pService.getOrders(fiat, crypto);
-      console.log(`${exchange.toUpperCase()} orders fetched successfully:`, {
-        buyOrdersCount: data.buyOrders.length,
-        sellOrdersCount: data.sellOrders.length
-      });
-      setOrders(data);
-    } catch (err: any) {
-      console.error(`Error in fetchOrders from ${exchange}:`, err);
-      setError(err.message || `Failed to fetch orders from ${exchange}. Please try again.`);
-    } finally {
-      setLoading(false);
+  // Get unique payment methods from orders
+  const getPaymentMethods = (orders: { buyOrders: any[]; sellOrders: any[] }) => {
+    const methods = new Set<string>();
+    methods.add('all');
+    
+    [...orders.buyOrders, ...orders.sellOrders].forEach(order => {
+      if (order.paymentMethods) {
+        order.paymentMethods.forEach((method: string) => methods.add(method));
+      }
+    });
+    
+    return Array.from(methods);
+  };
+
+  // Filter orders based on selected payment methods
+  const getFilteredOrders = (orders: { buyOrders: any[]; sellOrders: any[] }, selectedPaymentMethods: string[]) => {
+    if (selectedPaymentMethods.includes('all')) {
+      return orders;
     }
-  }, [fiat, crypto, exchange]);
+
+    return {
+      buyOrders: orders.buyOrders.filter(order => 
+        order.paymentMethods && order.paymentMethods.some((method: string) => selectedPaymentMethods.includes(method))
+      ),
+      sellOrders: orders.sellOrders.filter(order => 
+        order.paymentMethods && order.paymentMethods.some((method: string) => selectedPaymentMethods.includes(method))
+      )
+    };
+  };
 
   useEffect(() => {
-    // Initial fetch
+    const fetchOrders = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const p2pService = exchange === 'okx' ? okxP2PService : binanceP2PService;
+        const data = await p2pService.getOrders(fiat, crypto);
+        setOrders(prev => ({
+          ...data,
+          hasChanges: JSON.stringify(data) !== JSON.stringify(prev)
+        }));
+      } catch (error) {
+        console.error('Error fetching orders:', error);
+        setError(error instanceof Error ? error.message : 'Failed to fetch orders');
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchOrders();
+    const interval = setInterval(fetchOrders, POLLING_INTERVAL);
+    return () => clearInterval(interval);
+  }, [exchange, fiat, crypto]);
 
-    // Set up polling
-    const intervalId = setInterval(fetchOrders, POLLING_INTERVAL);
-
-    // Cleanup
-    return () => clearInterval(intervalId);
-  }, [fetchOrders]);
+  const paymentMethodOptions = getPaymentMethods(orders);
+  const filteredOrders = getFilteredOrders(orders, selectedPaymentMethods);
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -109,16 +135,65 @@ export default function DashboardPage() {
                 </div>
               </TabsContent>
               <TabsContent value="order-book">
-                <OrderBook 
-                  fiat={fiat} 
-                  crypto={crypto} 
-                  buyOrders={orders.buyOrders}
-                  sellOrders={orders.sellOrders}
-                  loading={loading}
-                  error={error}
-                  hasChanges={orders.hasChanges}
-                  exchange={exchange}
-                />
+                <div className="space-y-4">
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div>
+                        <Label>Payment Methods:</Label>
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPaymentMethods(['all'])}
+                            className={cn(
+                              "px-2 py-0.5 rounded-full text-[11px] border transition-colors",
+                              selectedPaymentMethods.includes('all')
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "bg-background hover:bg-muted border-input"
+                            )}
+                          >
+                            All
+                          </button>
+                          {paymentMethodOptions
+                            .filter(method => method !== 'all')
+                            .map((method: string) => (
+                              <button
+                                key={method}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedPaymentMethods(prev => {
+                                    const newMethods = prev.includes('all')
+                                      ? [method]
+                                      : prev.includes(method)
+                                        ? prev.filter(m => m !== method)
+                                        : [...prev, method];
+                                    return newMethods.length ? newMethods : ['all'];
+                                  });
+                                }}
+                                className={cn(
+                                  "px-2 py-0.5 rounded-full text-[11px] border transition-colors",
+                                  selectedPaymentMethods.includes(method)
+                                    ? "bg-primary text-primary-foreground border-primary"
+                                    : "bg-background hover:bg-muted border-input"
+                                )}
+                              >
+                                {method}
+                              </button>
+                            ))}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <OrderBook 
+                    fiat={fiat} 
+                    crypto={crypto} 
+                    buyOrders={filteredOrders.buyOrders}
+                    sellOrders={filteredOrders.sellOrders}
+                    loading={loading}
+                    error={error}
+                    hasChanges={orders.hasChanges}
+                    exchange={exchange}
+                  />
+                </div>
               </TabsContent>
               <TabsContent value="p2p-comparison">
                 <P2PComparison 

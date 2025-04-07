@@ -64,10 +64,10 @@ export class OkxP2PService {
       // Use our backend endpoint that properly handles OKX API requests
       const response = await axios.get(`/api/p2p/okx?fiat=${fiat}&crypto=${crypto}&tradeType=${tradeType}`);
       
-      // Check if we have a valid JSON response with orders
-      if (response.data && response.data.orders && Array.isArray(response.data.orders)) {
-        this.log(`✅ Successfully fetched data from OKX API: ${response.data.orders.length} orders found`);
-        return response.data.orders;
+      // Check if we have a valid response with orders
+      if (response.data && Array.isArray(response.data)) {
+        this.log(`✅ Successfully fetched data from OKX API: ${response.data.length} orders found`);
+        return response.data;
       } else {
         this.log('❌ No valid orders found in response');
         return [];

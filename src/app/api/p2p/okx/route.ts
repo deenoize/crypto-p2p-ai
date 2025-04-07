@@ -9,91 +9,44 @@ import path from 'path';
  * Uses the public P2P endpoint to fetch real-time market data
  */
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const crypto = searchParams.get('crypto') || 'USDT';
-  const fiat = searchParams.get('fiat') || 'USD';
-  const tradeType = searchParams.get('tradeType') || 'BUY';
-  const debug = searchParams.get('debug') === 'true';
-
-  // Log request information
-  console.log('---------------------------------------------------');
-  console.log(`🔄 OKX P2P API Request: { fiat: '${fiat}', crypto: '${crypto}', tradeType: '${tradeType}', debug: ${debug} }`);
-  console.log('---------------------------------------------------');
-  
-  // Debug logging
-  if (debug) {
-    const logPath = path.join(process.cwd(), 'okx-api-debug.log');
-    try {
-      // Clear log file if it exists
-      fs.writeFileSync(logPath, '');
-      console.log(`Cleared debug log file at ${logPath}`);
-    } catch (err) {
-      console.error('Error writing to debug log:', err);
-    }
-  }
-  
-  console.log(`INFO: Processing P2P request: { fiat: '${fiat}', crypto: '${crypto}', tradeType: '${tradeType}' }`);
-
   try {
-    // Use the correct P2P API endpoint
-    const response = await axios.get('https://www.okx.com/v3/c2c/tradingOrders/books', {
-      params: {
-        quoteCurrency: fiat,
-        baseCurrency: crypto,
-        side: tradeType.toLowerCase(),
-        paymentMethod: 'all',
-        userType: 'all',
-        showTrade: false,
-        showFollow: false,
-        showAlreadyTraded: false,
-        isAbleFilter: false
-      },
+    const { searchParams } = new URL(request.url);
+    const fiat = searchParams.get('fiat');
+    const crypto = searchParams.get('crypto');
+    const tradeType = searchParams.get('tradeType');
+
+    if (!fiat || !crypto || !tradeType) {
+      return NextResponse.json(
+        { error: 'Missing required parameters' },
+        { status: 400 }
+      );
+    }
+
+    const response = await fetch(`https://www.okx.com/v3/c2c/tradingOrders/books?quoteCurrency=${fiat}&baseCurrency=${crypto}&side=${tradeType.toLowerCase()}&paymentMethod=all&userType=all&showTrade=false&showFollow=false&showAlreadyTraded=false&isAbleFilter=false`, {
+      method: 'GET',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Origin': 'https://www.okx.com',
-        'Referer': 'https://www.okx.com/p2p/ads',
-        'x-cdn': '1',
-        'x-locale': 'en_US'
-      }
+      },
+      cache: 'no-store',
     });
 
-    if (response.status === 200 && response.data) {
-      // Format the response using our formatter
-      const formattedData = formatOKXOrders(response.data, fiat, crypto, tradeType);
-      return NextResponse.json(formattedData);
+    if (!response.ok) {
+      throw new Error(`OKX API error: ${response.status}`);
     }
 
-    throw new Error(`Failed to fetch data: ${response.status} ${response.statusText}`);
-  } catch (error: any) {
-    console.error('Error fetching OKX P2P data:', error);
+    const rawData = await response.json();
     
-    // Log detailed error information
-    const errorDetails = {
-      message: error.message,
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      data: error.response?.data,
-      headers: error.response?.headers,
-      config: {
-        url: error.config?.url,
-        method: error.config?.method,
-        params: error.config?.params,
-        headers: error.config?.headers
-      }
-    };
+    // Format the response data
+    const formattedData = formatOKXOrders(rawData, fiat, crypto, tradeType);
     
-    console.error('Detailed error information:', JSON.stringify(errorDetails, null, 2));
-    
-    // Return error response
-    return NextResponse.json({
-      error: {
-        message: error.message,
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data
-      }
-    }, { status: error.response?.status || 500 });
+    return NextResponse.json(formattedData);
+  } catch (error) {
+    console.error('Error fetching from OKX:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch data from OKX' },
+      { status: 500 }
+    );
   }
 } 

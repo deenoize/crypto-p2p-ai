@@ -1,18 +1,18 @@
-import React from "react";
 import type { Metadata } from "next";
 import "./globals.css";
+import { Toaster } from "sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 
 export const metadata: Metadata = {
   title: "P2P Arbitrage Dashboard",
-  description: "Real-time P2P arbitrage opportunities across exchanges",
+  description: "Monitor and analyze P2P crypto trading opportunities across multiple exchanges",
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -24,11 +24,12 @@ export default function RootLayout({
       <body className="font-sans">
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
-          enableSystem
+          defaultTheme="dark"
+          enableSystem={false}
           disableTransitionOnChange
         >
           {children}
+          <Toaster richColors position="top-right" />
         </ThemeProvider>
       </body>
     </html>
